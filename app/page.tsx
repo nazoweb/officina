@@ -9,7 +9,6 @@ import { StoricoTab } from "@/components/storico-tab";
 import { ImpostazioniTab } from "@/components/impostazioni-tab";
 import { runInternalTests } from "@/lib/coding";
 import { Warehouse, Code2, Unlock, ListPlus, History, Settings } from "lucide-react";
-import { ThemeProvider } from "@/components/theme-provider";
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState("codifica");
@@ -29,14 +28,8 @@ export default function Home() {
   };
 
   return (
-    <ThemeProvider
-      attribute="class"
-      defaultTheme="system"
-      enableSystem
-      disableTransitionOnChange
-    >
-      <div className="min-h-screen bg-background">
-        <div className="container mx-auto max-w-5xl px-4 py-8">
+    <div className="min-h-screen bg-background">
+      <div className="container mx-auto max-w-5xl px-4 py-8">
           {/* Header */}
           <header className="mb-8">
             <div className="flex items-center gap-3 mb-2">
@@ -104,8 +97,7 @@ export default function Home() {
               <ImpostazioniTab onDataCleared={handleDataCleared} />
             </TabsContent>
           </Tabs>
-        </div>
       </div>
-    </ThemeProvider>
+    </div>
   );
 }
