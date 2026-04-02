@@ -2,17 +2,27 @@
 
 import { useEffect, useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
 import { CodificaTab } from "@/components/codifica-tab";
 import { DecodificaTab } from "@/components/decodifica-tab";
 import { InserimentoMultiploTab } from "@/components/inserimento-multiplo-tab";
 import { StoricoTab } from "@/components/storico-tab";
 import { ImpostazioniTab } from "@/components/impostazioni-tab";
 import { runInternalTests } from "@/lib/coding";
-import { Warehouse, Code2, Unlock, ListPlus, History, Settings } from "lucide-react";
+import { getSettings, saveSettings } from "@/lib/storage";
+import { useTheme } from "next-themes";
+import { Warehouse, Code2, Unlock, ListPlus, History, Settings, Moon, Sun } from "lucide-react";
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState("codifica");
   const [key, setKey] = useState(0); // For forcing re-render on data clear
+  const [mounted, setMounted] = useState(false);
+  const { resolvedTheme, setTheme } = useTheme();
+
+  useEffect(() => {
+    setMounted(true);
+    setTheme(getSettings().theme);
+  }, [setTheme]);
 
   // Run internal tests in development mode
   useEffect(() => {
@@ -27,18 +37,34 @@ export default function Home() {
     setActiveTab("codifica");
   };
 
+  const handleToggleTheme = () => {
+    const nextTheme = resolvedTheme === "dark" ? "light" : "dark";
+    setTheme(nextTheme);
+    saveSettings({ ...getSettings(), theme: nextTheme });
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto max-w-5xl px-4 py-8">
           {/* Header */}
           <header className="mb-8">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-                <Warehouse className="h-5 w-5" />
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+                  <Warehouse className="h-5 w-5" />
+                </div>
+                <h1 className="text-2xl font-bold tracking-tight text-balance">
+                  Gestione Codici Magazzino
+                </h1>
               </div>
-              <h1 className="text-2xl font-bold tracking-tight text-balance">
-                Gestione Codici Magazzino
-              </h1>
+              <Button variant="outline" size="sm" onClick={handleToggleTheme}>
+                {mounted && resolvedTheme === "dark" ? (
+                  <Sun className="mr-2 h-4 w-4" />
+                ) : (
+                  <Moon className="mr-2 h-4 w-4" />
+                )}
+                Tema
+              </Button>
             </div>
             <p className="text-muted-foreground">
               Strumento interno per la codifica e decodifica dei codici magazzino
