@@ -104,11 +104,6 @@ export default function Home() {
               <ImpostazioniTab onDataCleared={handleDataCleared} />
             </TabsContent>
           </Tabs>
-
-          {/* Footer */}
-          <footer className="mt-12 border-t pt-6 text-center text-sm text-muted-foreground">
-            <p>Gestione Codici Magazzino • Officina Meccanica</p>
-          </footer>
         </div>
       </div>
     </ThemeProvider>
