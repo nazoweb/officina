@@ -28,6 +28,10 @@ interface StoredState {
   results: EncodeResult[];
 }
 
+const CATEGORY_OPTIONS = Object.entries(CATEGORIES).sort(
+  ([codeA], [codeB]) => Number(codeA) - Number(codeB)
+);
+
 export function CodificaTab() {
   const [category, setCategory] = useState<CategoryCode | "">("");
   const [producerCodes, setProducerCodes] = useState("");
@@ -143,7 +147,7 @@ export function CodificaTab() {
                 <SelectValue placeholder="Seleziona categoria" />
               </SelectTrigger>
               <SelectContent>
-                {Object.entries(CATEGORIES).map(([code, name]) => (
+                {CATEGORY_OPTIONS.map(([code, name]) => (
                   <SelectItem key={code} value={code}>
                     {code} - {name}
                   </SelectItem>
