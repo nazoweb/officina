@@ -61,9 +61,9 @@ export default function Home() {
               </div>
               <Button variant="outline" size="sm" onClick={handleToggleTheme}>
                 {mounted && resolvedTheme === "dark" ? (
-                  <Sun className="mr-2 h-4 w-4" />
-                ) : (
                   <Moon className="mr-2 h-4 w-4" />
+                ) : (
+                  <Sun className="mr-2 h-4 w-4" />
                 )}
                 {currentVisibleTheme}
               </Button>
