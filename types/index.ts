@@ -11,6 +11,7 @@ export interface DecodeResult {
   categoryCode: CategoryCode;
   categoryName: string;
   producerCode: string;
+  stockCode?: string; // Added for table display
 }
 
 export interface BulkError {

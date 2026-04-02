@@ -12,13 +12,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { FieldGroup, Field, FieldLabel } from "@/components/ui/field";
+import { ResultsTable } from "@/components/results-table";
 import { CATEGORIES, type CategoryCode } from "@/lib/categories";
 import { encodeProducerCode, type EncodeResult } from "@/lib/coding";
-import { exportRowsToCsv, type CsvRow } from "@/lib/csv";
-import { Copy, Download, Check, AlertCircle, Loader2 } from "lucide-react";
+import { addHistoryEntry, getSettings } from "@/lib/storage";
+import { AlertCircle, Loader2 } from "lucide-react";
 
 const STORAGE_KEY = "codifica-tab-state";
 
@@ -34,7 +34,6 @@ export function CodificaTab() {
   const [results, setResults] = useState<EncodeResult[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [copied, setCopied] = useState(false);
 
   // Load from localStorage on mount
   useEffect(() => {
@@ -57,6 +56,18 @@ export function CodificaTab() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   }, [category, producerCodes, results]);
 
+  /**
+   * Normalize input to handle various separator formats
+   * Accepts: ; or newline as separators
+   * Handles extra spaces
+   */
+  const parseInput = (input: string): string[] => {
+    return input
+      .split(/[;\n]/)
+      .map((code) => code.trim())
+      .filter((code) => code.length > 0);
+  };
+
   const handleGenerate = async () => {
     setError(null);
     setResults([]);
@@ -66,10 +77,7 @@ export function CodificaTab() {
       return;
     }
 
-    const codes = producerCodes
-      .split(";")
-      .map((code) => code.trim())
-      .filter((code) => code.length > 0);
+    const codes = parseInput(producerCodes);
 
     if (codes.length === 0) {
       setError("Inserisci almeno un codice produttore");
@@ -85,6 +93,16 @@ export function CodificaTab() {
         newResults.push(result);
       }
       setResults(newResults);
+
+      // Save to history if enabled
+      const settings = getSettings();
+      if (settings.autoSaveHistory) {
+        addHistoryEntry({
+          type: "codifica",
+          input: producerCodes,
+          results: newResults,
+        });
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Errore durante la codifica");
     } finally {
@@ -92,25 +110,12 @@ export function CodificaTab() {
     }
   };
 
-  const handleCopyAll = async () => {
-    const text = results.map((r) => r.stockCode).join("\n");
-    await navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const handleRemoveRow = (index: number) => {
+    setResults((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const handleCopySingle = async (code: string) => {
-    await navigator.clipboard.writeText(code);
-  };
-
-  const handleExportCsv = () => {
-    const rows: CsvRow[] = results.map((r) => ({
-      categoria: r.categoryCode,
-      nome_categoria: r.categoryName,
-      codice_produttore: r.producerCode,
-      codice_magazzino: r.stockCode,
-    }));
-    exportRowsToCsv(rows);
+  const handleClearResults = () => {
+    setResults([]);
   };
 
   const handleReset = () => {
@@ -151,13 +156,13 @@ export function CodificaTab() {
             <FieldLabel htmlFor="producer-codes">Codici Produttore</FieldLabel>
             <Textarea
               id="producer-codes"
-              placeholder="BOSCH123 oppure BOSCH123;VALEO77;MAGNETI9"
+              placeholder="BOSCH123&#10;VALEO77&#10;MAGNETI9"
               value={producerCodes}
               onChange={(e) => setProducerCodes(e.target.value)}
               rows={4}
             />
             <p className="text-sm text-muted-foreground">
-              Inserisci uno o più codici separati da punto e virgola (;)
+              Inserisci uno o più codici separati da punto e virgola (;) o su righe separate
             </p>
           </Field>
         </FieldGroup>
@@ -168,7 +173,7 @@ export function CodificaTab() {
             Genera
           </Button>
           <Button variant="outline" onClick={handleReset}>
-            Pulisci
+            Pulisci tutto
           </Button>
         </div>
 
@@ -179,55 +184,15 @@ export function CodificaTab() {
           </Alert>
         )}
 
-        {results.length > 0 && (
+        {(results.length > 0 || !error) && (
           <>
             <Separator />
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="font-semibold">
-                  Risultati <Badge variant="secondary">{results.length}</Badge>
-                </h3>
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={handleCopyAll}>
-                    {copied ? (
-                      <Check className="mr-2 h-4 w-4" />
-                    ) : (
-                      <Copy className="mr-2 h-4 w-4" />
-                    )}
-                    {copied ? "Copiato!" : "Copia tutto"}
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={handleExportCsv}>
-                    <Download className="mr-2 h-4 w-4" />
-                    Scarica CSV
-                  </Button>
-                </div>
-              </div>
-
-              <div className="rounded-lg border bg-muted/50 p-4">
-                <div className="space-y-2">
-                  {results.map((result, index) => (
-                    <div
-                      key={index}
-                      className="flex items-center justify-between rounded-md bg-background p-3 font-mono text-sm"
-                    >
-                      <div className="flex flex-col gap-1">
-                        <span className="font-semibold">{result.stockCode}</span>
-                        <span className="text-xs text-muted-foreground">
-                          {result.categoryName} • {result.producerCode}
-                        </span>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleCopySingle(result.stockCode)}
-                      >
-                        <Copy className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
+            <ResultsTable
+              results={results}
+              onRemoveRow={handleRemoveRow}
+              onClearAll={results.length > 0 ? handleClearResults : undefined}
+              emptyMessage="Nessun risultato"
+            />
           </>
         )}
       </CardContent>
