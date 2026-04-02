@@ -43,6 +43,8 @@ export default function Home() {
     saveSettings({ ...getSettings(), theme: nextTheme });
   };
 
+  const currentVisibleTheme = mounted && resolvedTheme === "dark" ? "Scuro" : "Chiaro";
+
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto max-w-5xl px-4 py-8">
@@ -63,7 +65,7 @@ export default function Home() {
                 ) : (
                   <Moon className="mr-2 h-4 w-4" />
                 )}
-                Tema
+                {currentVisibleTheme}
               </Button>
             </div>
             <p className="text-muted-foreground">
