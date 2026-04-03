@@ -73,7 +73,7 @@ export function ImpostazioniTab({ onDataCleared }: ImpostazioniTabProps) {
   const { setTheme } = useTheme();
   const [categoryCode, setCategoryCode] = useState("");
   const [categoryName, setCategoryName] = useState("");
-  const [customCategories, setCustomCategories] = useState<[string, string][]>([]);
+  const [categories, setCategories] = useState<[string, string][]>([]);
   const [categoryStatus, setCategoryStatus] = useState<{
     type: "success" | "error";
     message: string;
@@ -82,15 +82,15 @@ export function ImpostazioniTab({ onDataCleared }: ImpostazioniTabProps) {
   // Load settings on mount
   useEffect(() => {
     setSettings(getSettings());
-    setCustomCategories(
+    setCategories(
       Object.entries(getUserCategories()).sort(
         ([codeA], [codeB]) => Number(codeA) - Number(codeB)
       )
     );
   }, []);
 
-  const refreshCustomCategories = () => {
-    setCustomCategories(
+  const refreshCategories = () => {
+    setCategories(
       Object.entries(getUserCategories()).sort(
         ([codeA], [codeB]) => Number(codeA) - Number(codeB)
       )
@@ -138,7 +138,7 @@ export function ImpostazioniTab({ onDataCleared }: ImpostazioniTabProps) {
           });
           // Reload settings
           setSettings(getSettings());
-          refreshCustomCategories();
+          refreshCategories();
         } else {
           setImportStatus({
             type: "error",
@@ -167,7 +167,7 @@ export function ImpostazioniTab({ onDataCleared }: ImpostazioniTabProps) {
   const handleClearAllData = () => {
     clearAllData();
     setSettings(getSettings());
-    refreshCustomCategories();
+    refreshCategories();
     onDataCleared?.();
   };
 
@@ -182,12 +182,12 @@ export function ImpostazioniTab({ onDataCleared }: ImpostazioniTabProps) {
       return;
     }
 
-    refreshCustomCategories();
+    refreshCategories();
     setCategoryCode("");
     setCategoryName("");
     setCategoryStatus({
       type: "success",
-      message: "Categoria personalizzata salvata",
+      message: "Categoria salvata",
     });
     setTimeout(() => setCategoryStatus(null), 3000);
   };
@@ -203,7 +203,7 @@ export function ImpostazioniTab({ onDataCleared }: ImpostazioniTabProps) {
       return;
     }
 
-    refreshCustomCategories();
+    refreshCategories();
     setCategoryStatus({
       type: "success",
       message: `Categoria ${code} eliminata`,
@@ -297,9 +297,9 @@ export function ImpostazioniTab({ onDataCleared }: ImpostazioniTabProps) {
 
       <Card>
         <CardHeader>
-          <CardTitle>Categorie personalizzate</CardTitle>
+          <CardTitle>Categorie</CardTitle>
           <CardDescription>
-            Aggiungi categorie extra con codice numerico a 2 cifre (es. 11, 12, 25)
+            Gestisci l&apos;elenco categorie con codice numerico a 2 cifre (es. 01, 11, 25)
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -347,13 +347,13 @@ export function ImpostazioniTab({ onDataCleared }: ImpostazioniTabProps) {
 
           <Separator />
 
-          {customCategories.length === 0 ? (
+          {categories.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              Nessuna categoria personalizzata presente.
+              Nessuna categoria presente.
             </p>
           ) : (
             <div className="space-y-2">
-              {customCategories.map(([code, name]) => (
+              {categories.map(([code, name]) => (
                 <div
                   key={code}
                   className="flex items-center justify-between rounded-md border px-3 py-2"

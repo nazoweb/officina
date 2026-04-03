@@ -138,6 +138,7 @@ export interface BackupData {
   exportedAt: string;
   history: HistoryEntry[];
   settings: AppSettings;
+  categories?: Record<string, string>;
   userCategories?: Record<string, string>;
 }
 
@@ -147,7 +148,7 @@ export function exportBackup(): BackupData {
     exportedAt: new Date().toISOString(),
     history: getHistory(),
     settings: getSettings(),
-    userCategories: getUserCategories(),
+    categories: getUserCategories(),
   };
 }
 
@@ -170,9 +171,12 @@ export function importBackup(data: BackupData): { success: boolean; error?: stri
       saveSettings({ ...DEFAULT_SETTINGS, ...data.settings });
     }
 
-    // Import custom categories (backward compatible with older backups)
-    if (data.userCategories && typeof data.userCategories === "object") {
-      saveUserCategories(data.userCategories);
+    // Import categories (backward compatible with older backups)
+    if (data.categories && typeof data.categories === "object") {
+      saveUserCategories(data.categories);
+    } else if (data.userCategories && typeof data.userCategories === "object") {
+      const merged = { ...getUserCategories(), ...data.userCategories };
+      saveUserCategories(merged);
     }
     
     return { success: true };

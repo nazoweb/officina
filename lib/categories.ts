@@ -33,10 +33,10 @@ function dispatchCategoriesUpdated(): void {
 }
 
 export function getUserCategories(): Record<string, string> {
-  if (!canUseStorage()) return {};
+  if (!canUseStorage()) return { ...DEFAULT_CATEGORIES };
 
   const stored = localStorage.getItem(USER_CATEGORIES_KEY);
-  if (!stored) return {};
+  if (!stored) return { ...DEFAULT_CATEGORIES };
 
   try {
     const parsed = JSON.parse(stored);
@@ -51,14 +51,13 @@ export function getUserCategories(): Record<string, string> {
 
       if (!isValidCategoryCodeFormat(normalizedCode)) continue;
       if (!normalizedName) continue;
-      if (normalizedCode in DEFAULT_CATEGORIES) continue;
 
       sanitized[normalizedCode] = normalizedName;
     }
 
-    return sanitized;
+    return Object.keys(sanitized).length > 0 ? sanitized : { ...DEFAULT_CATEGORIES };
   } catch {
-    return {};
+    return { ...DEFAULT_CATEGORIES };
   }
 }
 
@@ -72,7 +71,6 @@ export function saveUserCategories(categories: Record<string, string>): void {
 
     if (!isValidCategoryCodeFormat(normalizedCode)) continue;
     if (!normalizedName) continue;
-    if (normalizedCode in DEFAULT_CATEGORIES) continue;
 
     sanitized[normalizedCode] = normalizedName;
   }
@@ -102,24 +100,14 @@ export function upsertUserCategory(
     return { success: false, error: "Il nome categoria non puo essere vuoto" };
   }
 
-  if (normalizedCode in DEFAULT_CATEGORIES) {
-    return {
-      success: false,
-      error: "Questo codice appartiene a una categoria di sistema e non puo essere modificato",
-    };
-  }
-
   const allCategories = getAllCategories();
-  if (normalizedCode in allCategories) {
-    return {
-      success: false,
-      error: `Il codice ${normalizedCode} e gia in uso`,
-    };
-  }
 
   const normalizedNameLower = normalizedName.toLocaleLowerCase("it-IT");
-  const nameConflictEntry = Object.entries(allCategories).find(([, existingName]) => {
-    return existingName.trim().toLocaleLowerCase("it-IT") === normalizedNameLower;
+  const nameConflictEntry = Object.entries(allCategories).find(([existingCode, existingName]) => {
+    return (
+      existingCode !== normalizedCode &&
+      existingName.trim().toLocaleLowerCase("it-IT") === normalizedNameLower
+    );
   });
 
   if (nameConflictEntry) {
@@ -140,16 +128,9 @@ export function upsertUserCategory(
 export function deleteUserCategory(categoryCode: string): { success: boolean; error?: string } {
   const normalizedCode = normalizeCategory(categoryCode);
 
-  if (normalizedCode in DEFAULT_CATEGORIES) {
-    return {
-      success: false,
-      error: "Le categorie di sistema non possono essere eliminate",
-    };
-  }
-
   const categories = getUserCategories();
   if (!(normalizedCode in categories)) {
-    return { success: false, error: "Categoria personalizzata non trovata" };
+    return { success: false, error: "Categoria non trovata" };
   }
 
   delete categories[normalizedCode];
