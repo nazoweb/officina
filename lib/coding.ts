@@ -1,7 +1,6 @@
 import { base32Encode, base32Decode } from "./base32";
 import {
   SECRET_KEY,
-  CATEGORIES,
   isValidCategory,
   getCategoryName,
   normalizeCategory,

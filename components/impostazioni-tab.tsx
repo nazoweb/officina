@@ -42,13 +42,19 @@ import {
   type BackupData,
 } from "@/lib/storage";
 import {
+  deleteUserCategory,
+  getUserCategories,
+  upsertUserCategory,
+} from "@/lib/categories";
+import {
   Download,
   Upload,
   Trash2,
   Check,
   AlertCircle,
-  Save,
   Settings,
+  Plus,
+  X,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 
@@ -65,11 +71,31 @@ export function ImpostazioniTab({ onDataCleared }: ImpostazioniTabProps) {
   } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { setTheme } = useTheme();
+  const [categoryCode, setCategoryCode] = useState("");
+  const [categoryName, setCategoryName] = useState("");
+  const [customCategories, setCustomCategories] = useState<[string, string][]>([]);
+  const [categoryStatus, setCategoryStatus] = useState<{
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
 
   // Load settings on mount
   useEffect(() => {
     setSettings(getSettings());
+    setCustomCategories(
+      Object.entries(getUserCategories()).sort(
+        ([codeA], [codeB]) => Number(codeA) - Number(codeB)
+      )
+    );
   }, []);
+
+  const refreshCustomCategories = () => {
+    setCustomCategories(
+      Object.entries(getUserCategories()).sort(
+        ([codeA], [codeB]) => Number(codeA) - Number(codeB)
+      )
+    );
+  };
 
   const handleSettingChange = <K extends keyof AppSettings>(
     key: K,
@@ -112,6 +138,7 @@ export function ImpostazioniTab({ onDataCleared }: ImpostazioniTabProps) {
           });
           // Reload settings
           setSettings(getSettings());
+          refreshCustomCategories();
         } else {
           setImportStatus({
             type: "error",
@@ -140,7 +167,48 @@ export function ImpostazioniTab({ onDataCleared }: ImpostazioniTabProps) {
   const handleClearAllData = () => {
     clearAllData();
     setSettings(getSettings());
+    refreshCustomCategories();
     onDataCleared?.();
+  };
+
+  const handleAddCategory = () => {
+    const result = upsertUserCategory(categoryCode, categoryName);
+
+    if (!result.success) {
+      setCategoryStatus({
+        type: "error",
+        message: result.error || "Impossibile aggiungere la categoria",
+      });
+      return;
+    }
+
+    refreshCustomCategories();
+    setCategoryCode("");
+    setCategoryName("");
+    setCategoryStatus({
+      type: "success",
+      message: "Categoria personalizzata salvata",
+    });
+    setTimeout(() => setCategoryStatus(null), 3000);
+  };
+
+  const handleDeleteCategory = (code: string) => {
+    const result = deleteUserCategory(code);
+
+    if (!result.success) {
+      setCategoryStatus({
+        type: "error",
+        message: result.error || "Impossibile eliminare la categoria",
+      });
+      return;
+    }
+
+    refreshCustomCategories();
+    setCategoryStatus({
+      type: "success",
+      message: `Categoria ${code} eliminata`,
+    });
+    setTimeout(() => setCategoryStatus(null), 3000);
   };
 
   if (!settings) {
@@ -223,6 +291,86 @@ export function ImpostazioniTab({ onDataCleared }: ImpostazioniTabProps) {
               <Check className="h-4 w-4" />
               <AlertDescription>Impostazioni salvate</AlertDescription>
             </Alert>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Categorie personalizzate</CardTitle>
+          <CardDescription>
+            Aggiungi categorie extra con codice numerico a 2 cifre (es. 11, 12, 25)
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <FieldGroup>
+            <div className="grid gap-3 md:grid-cols-[160px_1fr_auto]">
+              <Field>
+                <FieldLabel htmlFor="category-code">Codice</FieldLabel>
+                <Input
+                  id="category-code"
+                  placeholder="11"
+                  value={categoryCode}
+                  onChange={(e) => setCategoryCode(e.target.value)}
+                />
+              </Field>
+
+              <Field>
+                <FieldLabel htmlFor="category-name">Nome categoria</FieldLabel>
+                <Input
+                  id="category-name"
+                  placeholder="Frizioni"
+                  value={categoryName}
+                  onChange={(e) => setCategoryName(e.target.value)}
+                />
+              </Field>
+
+              <div className="flex items-end">
+                <Button onClick={handleAddCategory} className="w-full md:w-auto">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Aggiungi
+                </Button>
+              </div>
+            </div>
+          </FieldGroup>
+
+          {categoryStatus && (
+            <Alert variant={categoryStatus.type === "error" ? "destructive" : "default"}>
+              {categoryStatus.type === "error" ? (
+                <AlertCircle className="h-4 w-4" />
+              ) : (
+                <Check className="h-4 w-4" />
+              )}
+              <AlertDescription>{categoryStatus.message}</AlertDescription>
+            </Alert>
+          )}
+
+          <Separator />
+
+          {customCategories.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Nessuna categoria personalizzata presente.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {customCategories.map(([code, name]) => (
+                <div
+                  key={code}
+                  className="flex items-center justify-between rounded-md border px-3 py-2"
+                >
+                  <p className="text-sm">
+                    <span className="font-mono">{code}</span> - {name}
+                  </p>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleDeleteCategory(code)}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
           )}
         </CardContent>
       </Card>

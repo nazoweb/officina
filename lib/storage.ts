@@ -1,4 +1,9 @@
 import type { EncodeResult, DecodeResult, BulkError } from "@/types";
+import {
+  clearUserCategories,
+  getUserCategories,
+  saveUserCategories,
+} from "@/lib/categories";
 
 // ========================================
 // HISTORY TYPES
@@ -133,14 +138,16 @@ export interface BackupData {
   exportedAt: string;
   history: HistoryEntry[];
   settings: AppSettings;
+  userCategories?: Record<string, string>;
 }
 
 export function exportBackup(): BackupData {
   return {
-    version: 1,
+    version: 2,
     exportedAt: new Date().toISOString(),
     history: getHistory(),
     settings: getSettings(),
+    userCategories: getUserCategories(),
   };
 }
 
@@ -161,6 +168,11 @@ export function importBackup(data: BackupData): { success: boolean; error?: stri
     // Import settings if present
     if (data.settings && typeof data.settings === "object") {
       saveSettings({ ...DEFAULT_SETTINGS, ...data.settings });
+    }
+
+    // Import custom categories (backward compatible with older backups)
+    if (data.userCategories && typeof data.userCategories === "object") {
+      saveUserCategories(data.userCategories);
     }
     
     return { success: true };
@@ -197,6 +209,7 @@ export function clearAllData(): void {
   // Clear history and settings
   clearHistory();
   resetSettings();
+  clearUserCategories();
   
   // Clear tab states
   localStorage.removeItem("codifica-tab-state");

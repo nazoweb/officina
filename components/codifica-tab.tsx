@@ -15,7 +15,11 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
 import { FieldGroup, Field, FieldLabel } from "@/components/ui/field";
 import { ResultsTable } from "@/components/results-table";
-import { CATEGORIES, type CategoryCode } from "@/lib/categories";
+import {
+  getCategoryOptions,
+  getCategoryUpdateEventName,
+  isValidCategory,
+} from "@/lib/categories";
 import { encodeProducerCode, type EncodeResult } from "@/lib/coding";
 import { addHistoryEntry, getSettings } from "@/lib/storage";
 import { AlertCircle, Loader2 } from "lucide-react";
@@ -23,24 +27,27 @@ import { AlertCircle, Loader2 } from "lucide-react";
 const STORAGE_KEY = "codifica-tab-state";
 
 interface StoredState {
-  category: CategoryCode | "";
+  category: string;
   producerCodes: string;
   results: EncodeResult[];
 }
 
-const CATEGORY_OPTIONS = Object.entries(CATEGORIES).sort(
-  ([codeA], [codeB]) => Number(codeA) - Number(codeB)
-);
-
 export function CodificaTab() {
-  const [category, setCategory] = useState<CategoryCode | "">("");
+  const [category, setCategory] = useState("");
   const [producerCodes, setProducerCodes] = useState("");
   const [results, setResults] = useState<EncodeResult[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [categoryOptions, setCategoryOptions] = useState<[string, string][]>([]);
 
   // Load from localStorage on mount
   useEffect(() => {
+    const refreshCategoryOptions = () => {
+      setCategoryOptions(getCategoryOptions());
+    };
+
+    refreshCategoryOptions();
+
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
       try {
@@ -52,7 +59,22 @@ export function CodificaTab() {
         // Invalid JSON, ignore
       }
     }
+
+    const categoryEvent = getCategoryUpdateEventName();
+    window.addEventListener(categoryEvent, refreshCategoryOptions);
+    window.addEventListener("storage", refreshCategoryOptions);
+
+    return () => {
+      window.removeEventListener(categoryEvent, refreshCategoryOptions);
+      window.removeEventListener("storage", refreshCategoryOptions);
+    };
   }, []);
+
+  useEffect(() => {
+    if (category && !isValidCategory(category)) {
+      setCategory("");
+    }
+  }, [category, categoryOptions]);
 
   // Save to localStorage when state changes
   useEffect(() => {
@@ -142,12 +164,12 @@ export function CodificaTab() {
         <FieldGroup>
           <Field>
             <FieldLabel htmlFor="category">Categoria</FieldLabel>
-            <Select value={category} onValueChange={(v) => setCategory(v as CategoryCode)}>
+            <Select value={category} onValueChange={setCategory}>
               <SelectTrigger id="category">
                 <SelectValue placeholder="Seleziona categoria" />
               </SelectTrigger>
               <SelectContent>
-                {CATEGORY_OPTIONS.map(([code, name]) => (
+                {categoryOptions.map(([code, name]) => (
                   <SelectItem key={code} value={code}>
                     {code} - {name}
                   </SelectItem>

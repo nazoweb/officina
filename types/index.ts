@@ -1,14 +1,12 @@
-import type { CategoryCode } from "@/lib/categories";
-
 export interface EncodeResult {
-  categoryCode: CategoryCode;
+  categoryCode: string;
   categoryName: string;
   producerCode: string;
   stockCode: string;
 }
 
 export interface DecodeResult {
-  categoryCode: CategoryCode;
+  categoryCode: string;
   categoryName: string;
   producerCode: string;
   stockCode?: string; // Added for table display
