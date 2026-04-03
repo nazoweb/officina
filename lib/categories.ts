@@ -32,11 +32,29 @@ function dispatchCategoriesUpdated(): void {
   window.dispatchEvent(new Event(CATEGORY_UPDATED_EVENT));
 }
 
+function initializeCategoriesIfMissing(): Record<string, string> {
+  if (!canUseStorage()) return { ...DEFAULT_CATEGORIES };
+
+  const existing = localStorage.getItem(USER_CATEGORIES_KEY);
+  if (existing !== null) {
+    return {};
+  }
+
+  const initial = { ...DEFAULT_CATEGORIES };
+  localStorage.setItem(USER_CATEGORIES_KEY, JSON.stringify(initial));
+  return initial;
+}
+
 export function getUserCategories(): Record<string, string> {
   if (!canUseStorage()) return { ...DEFAULT_CATEGORIES };
 
+  const initialized = initializeCategoriesIfMissing();
+  if (Object.keys(initialized).length > 0) {
+    return initialized;
+  }
+
   const stored = localStorage.getItem(USER_CATEGORIES_KEY);
-  if (!stored) return { ...DEFAULT_CATEGORIES };
+  if (!stored) return {};
 
   try {
     const parsed = JSON.parse(stored);
@@ -55,9 +73,9 @@ export function getUserCategories(): Record<string, string> {
       sanitized[normalizedCode] = normalizedName;
     }
 
-    return Object.keys(sanitized).length > 0 ? sanitized : { ...DEFAULT_CATEGORIES };
+    return sanitized;
   } catch {
-    return { ...DEFAULT_CATEGORIES };
+    return {};
   }
 }
 
@@ -140,10 +158,7 @@ export function deleteUserCategory(categoryCode: string): { success: boolean; er
 }
 
 export function getAllCategories(): Record<string, string> {
-  return {
-    ...DEFAULT_CATEGORIES,
-    ...getUserCategories(),
-  };
+  return getUserCategories();
 }
 
 export function getCategoryOptions(): [string, string][] {

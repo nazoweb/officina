@@ -218,13 +218,8 @@ export function ImpostazioniTab({ onDataCleared }: ImpostazioniTabProps) {
   };
 
   const handleDeleteCategory = (code: string, name: string) => {
-    if (isCategoryReferencedInHistory(code)) {
-      setPendingDeleteCategory({ code, name });
-      setDeleteConfirmOpen(true);
-      return;
-    }
-
-    performDeleteCategory(code);
+    setPendingDeleteCategory({ code, name });
+    setDeleteConfirmOpen(true);
   };
 
   const handleConfirmDeleteCategory = () => {
@@ -233,6 +228,10 @@ export function ImpostazioniTab({ onDataCleared }: ImpostazioniTabProps) {
     setPendingDeleteCategory(null);
     setDeleteConfirmOpen(false);
   };
+
+  const isPendingDeleteReferencedInHistory = pendingDeleteCategory
+    ? isCategoryReferencedInHistory(pendingDeleteCategory.code)
+    : false;
 
   if (!settings) {
     return null;
@@ -409,11 +408,13 @@ export function ImpostazioniTab({ onDataCleared }: ImpostazioniTabProps) {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Categoria presente nello storico</AlertDialogTitle>
+            <AlertDialogTitle>Conferma eliminazione categoria</AlertDialogTitle>
             <AlertDialogDescription>
-              La categoria {pendingDeleteCategory?.code} - {pendingDeleteCategory?.name} compare
-              nello storico operazioni. Se la elimini, i record storici restano ma la categoria non
-              sara piu disponibile nelle nuove operazioni. Vuoi continuare davvero?
+              Stai per eliminare la categoria {pendingDeleteCategory?.code} - {pendingDeleteCategory?.name}.
+              Questa azione e irreversibile.
+              {isPendingDeleteReferencedInHistory
+                ? " La categoria compare nello storico operazioni: i record storici restano ma la categoria non sara piu disponibile nelle nuove operazioni."
+                : ""}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
