@@ -101,6 +101,19 @@ export function clearHistory(): void {
   localStorage.removeItem(HISTORY_KEY);
 }
 
+export function isCategoryReferencedInHistory(categoryCode: string): boolean {
+  const normalized = categoryCode.trim();
+  if (!normalized) return false;
+
+  return getHistory().some((entry) => {
+    return entry.results.some((result) => {
+      if (!result || typeof result !== "object") return false;
+      const candidate = (result as { categoryCode?: unknown }).categoryCode;
+      return typeof candidate === "string" && candidate === normalized;
+    });
+  });
+}
+
 // ========================================
 // SETTINGS FUNCTIONS
 // ========================================

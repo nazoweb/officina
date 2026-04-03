@@ -38,6 +38,7 @@ import {
   downloadBackup,
   importBackup,
   clearAllData,
+  isCategoryReferencedInHistory,
   type AppSettings,
   type BackupData,
 } from "@/lib/storage";
@@ -77,6 +78,11 @@ export function ImpostazioniTab({ onDataCleared }: ImpostazioniTabProps) {
   const [categoryStatus, setCategoryStatus] = useState<{
     type: "success" | "error";
     message: string;
+  } | null>(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [pendingDeleteCategory, setPendingDeleteCategory] = useState<{
+    code: string;
+    name: string;
   } | null>(null);
 
   // Load settings on mount
@@ -192,7 +198,7 @@ export function ImpostazioniTab({ onDataCleared }: ImpostazioniTabProps) {
     setTimeout(() => setCategoryStatus(null), 3000);
   };
 
-  const handleDeleteCategory = (code: string) => {
+  const performDeleteCategory = (code: string) => {
     const result = deleteUserCategory(code);
 
     if (!result.success) {
@@ -209,6 +215,23 @@ export function ImpostazioniTab({ onDataCleared }: ImpostazioniTabProps) {
       message: `Categoria ${code} eliminata`,
     });
     setTimeout(() => setCategoryStatus(null), 3000);
+  };
+
+  const handleDeleteCategory = (code: string, name: string) => {
+    if (isCategoryReferencedInHistory(code)) {
+      setPendingDeleteCategory({ code, name });
+      setDeleteConfirmOpen(true);
+      return;
+    }
+
+    performDeleteCategory(code);
+  };
+
+  const handleConfirmDeleteCategory = () => {
+    if (!pendingDeleteCategory) return;
+    performDeleteCategory(pendingDeleteCategory.code);
+    setPendingDeleteCategory(null);
+    setDeleteConfirmOpen(false);
   };
 
   if (!settings) {
@@ -364,7 +387,7 @@ export function ImpostazioniTab({ onDataCleared }: ImpostazioniTabProps) {
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => handleDeleteCategory(code)}
+                    onClick={() => handleDeleteCategory(code, name)}
                   >
                     <X className="h-4 w-4" />
                   </Button>
@@ -374,6 +397,36 @@ export function ImpostazioniTab({ onDataCleared }: ImpostazioniTabProps) {
           )}
         </CardContent>
       </Card>
+
+      <AlertDialog
+        open={deleteConfirmOpen}
+        onOpenChange={(open) => {
+          setDeleteConfirmOpen(open);
+          if (!open) {
+            setPendingDeleteCategory(null);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Categoria presente nello storico</AlertDialogTitle>
+            <AlertDialogDescription>
+              La categoria {pendingDeleteCategory?.code} - {pendingDeleteCategory?.name} compare
+              nello storico operazioni. Se la elimini, i record storici restano ma la categoria non
+              sara piu disponibile nelle nuove operazioni. Vuoi continuare davvero?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annulla</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDeleteCategory}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Elimina comunque
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Backup/Restore Card */}
       <Card>
