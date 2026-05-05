@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useTheme } from "next-themes";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
 import { SearchCodeForm } from "@/components/codici/SearchCodeForm";
@@ -12,12 +13,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { searchByCode } from "@/lib/codici/searchReferences";
 import { hasReferenceData, getReferenceStats } from "@/lib/codici/storageReferences";
 import { getRecentSearches, addRecentSearch } from "@/lib/codici/recentSearches";
-import { AlertCircle, FileSpreadsheet, Upload, Clock, X } from "lucide-react";
+import { AlertCircle, FileSpreadsheet, Upload, Clock, X, Moon, Sun } from "lucide-react";
 import type { SearchResult } from "@/types/codici";
 
 type PageState = "idle" | "loading" | "results" | "not-found";
 
 export default function CodiciPage() {
+  const { resolvedTheme, setTheme } = useTheme();
   const [state, setState] = useState<PageState>("idle");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [lastQuery, setLastQuery] = useState("");
@@ -54,9 +56,26 @@ export default function CodiciPage() {
   return (
     <>
       {/* Page header */}
-      <header className="flex h-14 shrink-0 items-center gap-2 border-b px-4">
-        <SidebarTrigger className="-ml-1" />
-        <span className="text-sm font-medium">Ricerca</span>
+      <header className="flex h-14 shrink-0 items-center justify-between gap-2 border-b px-4">
+        <div className="flex items-center gap-2">
+          <SidebarTrigger className="-ml-1" />
+          <span className="text-sm font-medium">Ricerca</span>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          className="flex items-center gap-2"
+          onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
+        >
+          {mounted && resolvedTheme === "dark" ? (
+            <Sun className="h-4 w-4" />
+          ) : (
+            <Moon className="h-4 w-4" />
+          )}
+          <span className="hidden md:inline text-sm">
+            {mounted && resolvedTheme === "dark" ? "Tema chiaro" : "Tema scuro"}
+          </span>
+        </Button>
       </header>
 
       <div className="max-w-6xl mx-auto px-4 py-8 w-full">

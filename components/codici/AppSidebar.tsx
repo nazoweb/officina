@@ -3,12 +3,9 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useTheme } from "next-themes";
-import { useEffect, useState } from "react";
 import {
   Sidebar,
   SidebarContent,
-  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
@@ -18,8 +15,7 @@ import {
   SidebarMenuItem,
   SidebarSeparator,
 } from "@/components/ui/sidebar";
-import { Button } from "@/components/ui/button";
-import { Search, Table2, Upload, Moon, Sun, Plus } from "lucide-react";
+import { Search, Table2, Upload, Plus } from "lucide-react";
 
 const NAV_ITEMS = [
   { href: "/codici", label: "Ricerca", icon: Search, exact: true },
@@ -30,10 +26,6 @@ const NAV_ITEMS = [
 
 export function AppSidebar() {
   const pathname = usePathname();
-  const { resolvedTheme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => { setMounted(true); }, []);
 
   return (
     <Sidebar collapsible="offcanvas">
@@ -75,26 +67,6 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-
-      <SidebarSeparator className="mx-0" />
-
-      <SidebarFooter className="p-3">
-        <Button
-          variant="ghost"
-          size="sm"
-          className="w-full justify-start gap-2"
-          onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
-        >
-          {mounted && resolvedTheme === "dark" ? (
-            <Sun className="h-4 w-4" />
-          ) : (
-            <Moon className="h-4 w-4" />
-          )}
-          <span className="text-sm">
-            {mounted && resolvedTheme === "dark" ? "Tema chiaro" : "Tema scuro"}
-          </span>
-        </Button>
-      </SidebarFooter>
 
     </Sidebar>
   );
