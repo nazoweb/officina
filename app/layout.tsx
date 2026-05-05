@@ -8,9 +8,8 @@ const _geist = Geist({ subsets: ["latin"] });
 const _geistMono = Geist_Mono({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: 'Gestione Codici Magazzino',
-  description: 'Strumento interno per la codifica e decodifica dei codici magazzino dell\'officina meccanica',
-  generator: 'v0.app',
+  title: 'Ricerca Codici',
+  description: 'Ricerca corrispondenze tra codici prodotto MAV, codici interni e cross reference.',
   icons: {
     icon: [
       {
