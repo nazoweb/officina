@@ -100,7 +100,7 @@ export function addManualGroup(
     if (!alreadyInThisGroup) index[code].push({ groupId: id, type });
   };
 
-  addToIndex(nostroCodice, "nostro_codice");
+  addToIndex(nostroCodice, "codice_interno");
   addToIndex(codiceMav, "codice_mav");
   crossReferences.forEach((c) => addToIndex(c, "cross_reference"));
 

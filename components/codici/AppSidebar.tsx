@@ -15,13 +15,14 @@ import {
   SidebarMenuItem,
   SidebarSeparator,
 } from "@/components/ui/sidebar";
-import { Search, Table2, Upload, Plus } from "lucide-react";
+import { Search, Boxes, ClipboardList, Upload, Plus } from "lucide-react";
 
 const NAV_ITEMS = [
-  { href: "/codici", label: "Ricerca", icon: Search, exact: true },
-  { href: "/codici/tabella", label: "Tutti i codici", icon: Table2, exact: false },
-  { href: "/codici/nuovo", label: "Crea codice", icon: Plus, exact: false },
-  { href: "/codici/import", label: "Carica Excel", icon: Upload, exact: false },
+  { href: "/codici", label: "Ricerca prodotto", icon: Search, exact: true },
+  { href: "/codici/magazzino", label: "Magazzino", icon: Boxes, exact: false },
+  { href: "/codici/ordini", label: "Liste ordini", icon: ClipboardList, exact: false },
+  { href: "/codici/nuovo", label: "Nuovo prodotto", icon: Plus, exact: false },
+  { href: "/codici/import", label: "Importa Excel", icon: Upload, exact: false },
 ];
 
 export function AppSidebar() {
