@@ -36,7 +36,7 @@ export async function findProductsByCode(rawCode: string): Promise<Product[]> {
 export async function createProduct(draft: ProductDraft): Promise<Product> {
   const supabase = createSupabaseBrowserClient();
   const internalCode = normalizeCode(draft.internal_code);
-  if (!internalCode || !draft.name.trim()) throw new Error("Codice prodotto e nome sono obbligatori.");
+  if (!internalCode || !draft.name?.trim()) throw new Error("Codice prodotto e nome sono obbligatori.");
   const { data: product, error } = await supabase.from("products").insert({
     internal_code: internalCode,
     name: draft.name.trim(),
@@ -55,6 +55,7 @@ export async function createProduct(draft: ProductDraft): Promise<Product> {
   const codes: Array<{ kind: IdentifierKind; value?: string }> = [
     { kind: "internal_code", value: internalCode },
     { kind: "barcode", value: draft.barcode },
+    { kind: "supplier_code", value: draft.supplierCode },
     { kind: "mav", value: draft.mav },
     ...(draft.crossReferences ?? []).map((value) => ({ kind: "cross_reference" as const, value })),
   ];
@@ -80,14 +81,24 @@ export async function upsertImportedProduct(draft: ProductDraft, source = "Impor
   if (!internalCode) throw new Error("Una riga non contiene il codice prodotto interno.");
   const { data: existing, error: existingError } = await supabase.from("products").select("id").eq("internal_code", internalCode).maybeSingle();
   throwIfError(existingError);
+  // Unmapped columns must not clear information already stored on a product.
   const values = {
-    internal_code: internalCode, name: draft.name?.trim() ?? "", description: draft.description?.trim() ?? "", brand: draft.brand?.trim() ?? "", category: draft.category?.trim() ?? "", location: draft.location?.trim() ?? "", unit: draft.unit?.trim() || "pz", minimum_stock: draft.minimumStock ?? null, supplier: draft.supplier?.trim() ?? "", notes: draft.notes?.trim() ?? "",
+    internal_code: internalCode,
+    ...(draft.name !== undefined && { name: draft.name.trim() }),
+    ...(draft.description !== undefined && { description: draft.description.trim() }),
+    ...(draft.brand !== undefined && { brand: draft.brand.trim() }),
+    ...(draft.category !== undefined && { category: draft.category.trim() }),
+    ...(draft.location !== undefined && { location: draft.location.trim() }),
+    ...(draft.unit !== undefined && { unit: draft.unit.trim() || "pz" }),
+    ...(draft.minimumStock !== undefined && { minimum_stock: draft.minimumStock }),
+    ...(draft.supplier !== undefined && { supplier: draft.supplier.trim() }),
+    ...(draft.notes !== undefined && { notes: draft.notes.trim() }),
   };
   const { data: product, error } = existing
     ? await supabase.from("products").update(values).eq("id", existing.id).select().single()
     : await supabase.from("products").insert({ ...values, stock_quantity: draft.stockQuantity ?? 0 }).select().single();
   throwIfError(error);
-  const codes: Array<{ kind: IdentifierKind; value?: string }> = [{ kind: "internal_code", value: internalCode }, { kind: "barcode", value: draft.barcode }, { kind: "mav", value: draft.mav }, ...(draft.crossReferences ?? []).map((value) => ({ kind: "cross_reference" as const, value }))];
+  const codes: Array<{ kind: IdentifierKind; value?: string }> = [{ kind: "internal_code", value: internalCode }, { kind: "supplier_code", value: draft.supplierCode }, { kind: "barcode", value: draft.barcode }, { kind: "mav", value: draft.mav }, ...(draft.crossReferences ?? []).map((value) => ({ kind: "cross_reference" as const, value }))];
   const identifiers = codes.map(({ kind, value }) => ({ kind, value: String(value ?? "").trim() })).filter(({ value }) => Boolean(value)).map(({ kind, value }) => ({ product_id: product.id, kind, value, normalized_value: normalizeCode(value) }));
   if (identifiers.length) { const { error: identifierError } = await supabase.from("product_identifiers").upsert(identifiers, { onConflict: "product_id,normalized_value", ignoreDuplicates: true }); throwIfError(identifierError); }
   for (const price of draft.prices ?? []) {

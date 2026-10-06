@@ -62,7 +62,8 @@ export interface OrderDetail extends OrderSummary {
 
 export interface ProductDraft {
   internal_code: string;
-  name: string;
+  name?: string;
+  supplierCode?: string;
   barcode?: string;
   mav?: string;
   crossReferences?: string[];

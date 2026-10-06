@@ -6,18 +6,80 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { upsertImportedProduct } from "@/lib/inventory/api";
-import { parseCrossReferences } from "@/lib/codici/normalizeCode";
 import { getReferenceGroups } from "@/lib/codici/storageReferences";
-
-type Field = "internal_code" | "name" | "barcode" | "mav" | "cross" | "stock" | "minimum_stock" | "brand" | "category" | "location" | "supplier";
-const labels: Record<Field, string> = { internal_code: "Codice interno", name: "Nome / descrizione", barcode: "Barcode", mav: "Codice MAV", cross: "Cross-reference", stock: "Giacenza iniziale", minimum_stock: "Scorta minima", brand: "Marca", category: "Categoria", location: "Ubicazione", supplier: "Fornitore" };
-const fields = Object.keys(labels) as Field[];
-const guess = (headers: string[], terms: string[]) => headers.find((header) => terms.some((term) => header.toUpperCase().includes(term))) ?? "";
+import { guessImportMapping, importedDraft, importLabels, type ImportField, type ImportMapping } from "@/lib/inventory/import";
 
 export function InventoryImport() {
-  const [headers, setHeaders] = useState<string[]>([]); const [rows, setRows] = useState<Record<string, unknown>[]>([]); const [mapping, setMapping] = useState<Record<Field, string>>({} as Record<Field, string>); const [priceHeaders, setPriceHeaders] = useState<string[]>([]); const [message, setMessage] = useState(""); const [error, setError] = useState(""); const [loading, setLoading] = useState(false);
-  const selectFile = async (file?: File) => { if (!file) return; setError(""); try { const book = XLSX.read(await file.arrayBuffer(), { type: "array", raw: false }); const sheet = book.Sheets[book.SheetNames[0]]; const parsed = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "", raw: false }); const nextHeaders = Object.keys(parsed[0] ?? {}); if (!nextHeaders.length) throw new Error("Il foglio è vuoto o non contiene intestazioni."); setHeaders(nextHeaders); setRows(parsed); setPriceHeaders(nextHeaders.filter((header) => /prezzo|listino|price/i.test(header))); setMapping({ internal_code: guess(nextHeaders, ["CODICE INTERNO", "CODICE", "ARTICOLO"]), name: guess(nextHeaders, ["DESCRIZIONE", "NOME", "PRODOTTO"]), barcode: guess(nextHeaders, ["BARCODE", "EAN"]), mav: guess(nextHeaders, ["MAV"]), cross: guess(nextHeaders, ["CROSS", "REFERENCE"]), stock: guess(nextHeaders, ["GIACENZA", "QUANTIT"]), minimum_stock: guess(nextHeaders, ["SCORTA MINIMA", "MINIMO"]), brand: guess(nextHeaders, ["MARCA", "BRAND"]), category: guess(nextHeaders, ["CATEGORIA"]), location: guess(nextHeaders, ["UBICAZIONE", "SCAFFALE"]), supplier: guess(nextHeaders, ["FORNITORE"]) }); } catch (cause) { setError(cause instanceof Error ? cause.message : "Impossibile leggere il file."); } };
-  const migrateLocalCodes = async () => { const groups = getReferenceGroups(); if (!groups.length) { setError("Non ci sono codici locali da migrare in questo browser."); return; } setLoading(true); setError(""); try { for (const group of groups) await upsertImportedProduct({ internal_code: group.nostroCodice || group.codiceMav || group.crossReferences[0], name: "", mav: group.codiceMav, crossReferences: group.crossReferences }, "Migrazione archivio locale"); setMessage(`Migrati ${groups.length} gruppi di codici locali. Completa nomi, prezzi e giacenze tramite Excel.`); } catch (cause) { setError(cause instanceof Error ? cause.message : "Migrazione interrotta."); } finally { setLoading(false); } };
-  const runImport = async () => { const codeColumn = mapping.internal_code; if (!codeColumn) { setError("Scegli la colonna del codice interno prima di importare."); return; } setLoading(true); setError(""); let created = 0; let updated = 0; let skipped = 0; try { for (const row of rows) { const code = String(row[codeColumn] ?? "").trim(); if (!code) { skipped++; continue; } const prices = priceHeaders.map((header) => ({ name: header, amount: Number(String(row[header] ?? "").replace(",", ".")) })).filter((price) => Number.isFinite(price.amount)); const result = await upsertImportedProduct({ internal_code: code, name: mapping.name ? String(row[mapping.name] ?? "") : "", barcode: mapping.barcode ? String(row[mapping.barcode] ?? "") : "", mav: mapping.mav ? String(row[mapping.mav] ?? "") : "", crossReferences: mapping.cross ? parseCrossReferences(row[mapping.cross]) : [], stockQuantity: mapping.stock ? Number(String(row[mapping.stock] ?? "").replace(",", ".")) || 0 : 0, minimumStock: mapping.minimum_stock ? Number(String(row[mapping.minimum_stock] ?? "").replace(",", ".")) || null : null, brand: mapping.brand ? String(row[mapping.brand] ?? "") : "", category: mapping.category ? String(row[mapping.category] ?? "") : "", location: mapping.location ? String(row[mapping.location] ?? "") : "", supplier: mapping.supplier ? String(row[mapping.supplier] ?? "") : "", prices }); result.created ? created++ : updated++; } setMessage(`Importazione conclusa: ${created} nuovi prodotti, ${updated} aggiornati, ${skipped} righe senza codice ignorate.`); } catch (cause) { setError(cause instanceof Error ? cause.message : "Importazione interrotta."); } finally { setLoading(false); } };
-  return <div className="space-y-5"><section className="rounded-xl border bg-card p-5"><label className="block text-sm font-semibold">File Excel<Input className="mt-3" type="file" accept=".xlsx,.xls" onChange={(e) => selectFile(e.target.files?.[0])} /></label><p className="mt-2 text-xs text-muted-foreground">Le colonne vengono lette dal primo foglio; puoi correggere la corrispondenza prima dell’importazione.</p></section><section className="rounded-xl border border-dashed bg-muted/20 p-5"><h2 className="font-semibold">Migra archivio precedente</h2><p className="mt-1 text-sm text-muted-foreground">Trasferisce i codici già salvati in questo browser. Non inventa nomi, prezzi o giacenze.</p><Button variant="outline" className="mt-3" onClick={migrateLocalCodes} disabled={loading}>Migra codici locali</Button></section>{headers.length > 0 && <><section className="rounded-xl border bg-card p-5"><h2 className="font-semibold">Mappa colonne</h2><div className="mt-4 grid gap-4 sm:grid-cols-2">{fields.map((field) => <label key={field} className="text-sm font-medium">{labels[field]}<select className="mt-1.5 h-9 w-full rounded-md border bg-background px-3 text-sm" value={mapping[field] || ""} onChange={(e) => setMapping({ ...mapping, [field]: e.target.value })}><option value="">— Non presente —</option>{headers.map((header) => <option value={header} key={header}>{header}</option>)}</select></label>)}</div><p className="mt-4 text-xs text-muted-foreground">Le colonne con “prezzo” o “listino” nel nome vengono importate automaticamente come listini di vendita.</p></section><section className="rounded-xl border bg-card p-5"><p className="text-sm text-muted-foreground">Anteprima: {rows.length} righe trovate. La giacenza viene inizializzata solo per prodotti nuovi; i successivi import non la sovrascrivono.</p><Button className="mt-4" onClick={runImport} disabled={loading}>{loading ? "Importazione in corso…" : "Conferma importazione"}</Button></section></>}{message && <Alert><AlertDescription>{message}</AlertDescription></Alert>}{error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}</div>;
+  const [headers, setHeaders] = useState<string[]>([]);
+  const [rows, setRows] = useState<Record<string, unknown>[]>([]);
+  const [mapping, setMapping] = useState<ImportMapping>({});
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const selectFile = async (file?: File) => {
+    if (!file) return;
+    setError(""); setMessage(""); setRows([]); setHeaders([]);
+    try {
+      const book = XLSX.read(await file.arrayBuffer(), { type: "array" });
+      const parsed = XLSX.utils.sheet_to_json<Record<string, unknown>>(book.Sheets[book.SheetNames[0]], { defval: "", raw: false });
+      const nextHeaders = Object.keys(parsed[0] ?? {});
+      if (!nextHeaders.length) throw new Error("Il foglio è vuoto o non contiene intestazioni.");
+      setHeaders(nextHeaders); setRows(parsed); setMapping(guessImportMapping(nextHeaders));
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Impossibile leggere il file."); }
+  };
+  const migrateLocalCodes = async () => {
+    const groups = getReferenceGroups();
+    if (!groups.length) { setError("Non ci sono codici locali da migrare in questo browser."); return; }
+    setLoading(true); setError(""); setMessage("");
+    try {
+      for (const group of groups) await upsertImportedProduct({ internal_code: group.nostroCodice || group.codiceMav || group.crossReferences[0], mav: group.codiceMav, crossReferences: group.crossReferences }, "Migrazione archivio locale");
+      setMessage(`Migrati ${groups.length} gruppi di codici locali. Completa nomi, prezzi e giacenze tramite Excel.`);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Migrazione interrotta."); }
+    finally { setLoading(false); }
+  };
+  const prepared = rows.map((row, index) => {
+    try { return { draft: importedDraft(row, mapping, headers), error: "" }; }
+    catch (cause) { return { draft: null, error: `Riga ${index + 2}: ${cause instanceof Error ? cause.message : "Dati non validi."}` }; }
+  });
+  const validationError = prepared.find((row) => row.error)?.error;
+  const runImport = async () => {
+    if (!mapping.internal_code) { setError("Scegli la colonna del nostro codice prima di importare."); return; }
+    if (validationError) { setError(validationError); return; }
+    setLoading(true); setError(""); setMessage("");
+    let created = 0; let updated = 0; let skipped = 0;
+    try {
+      for (const { draft } of prepared) {
+        if (!draft) { skipped++; continue; }
+        const result = await upsertImportedProduct(draft);
+        result.created ? created++ : updated++;
+      }
+      setMessage(`Importazione conclusa: ${created} nuovi prodotti, ${updated} aggiornati, ${skipped} righe senza codice ignorate.`);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Importazione interrotta."); }
+    finally { setLoading(false); }
+  };
+  return <div className="space-y-5">
+    <section className="rounded-xl border bg-card p-5">
+      <label className="block text-sm font-semibold">File Excel<Input className="mt-3" type="file" accept=".xlsx,.xls" disabled={loading} onChange={(e) => selectFile(e.target.files?.[0])} /></label>
+      <p className="mt-2 text-xs text-muted-foreground">Colonne supportate: CODICE FORNITORE, NOSTRO CODICE, CROSS REFERENCE, PREZZO VENDITA, SCONTO AZIENDE, SCONTO OFFICINE, CODICE A BARRE, QUANTITÀ. Viene letto il primo foglio.</p>
+    </section>
+    <section className="rounded-xl border border-dashed bg-muted/20 p-5">
+      <h2 className="font-semibold">Migra archivio precedente</h2>
+      <p className="mt-1 text-sm text-muted-foreground">Trasferisce i codici già salvati in questo browser senza cancellare le informazioni dei prodotti già presenti.</p>
+      <Button variant="outline" className="mt-3" onClick={migrateLocalCodes} disabled={loading}>Migra codici locali</Button>
+    </section>
+    {headers.length > 0 && <>
+      <section className="rounded-xl border bg-card p-5">
+        <h2 className="font-semibold">Mappa colonne</h2>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">{(Object.keys(importLabels) as ImportField[]).map((field) => <label key={field} className="text-sm font-medium">{importLabels[field]}<select disabled={loading} className="mt-1.5 h-9 w-full rounded-md border bg-background px-3 text-sm" value={mapping[field] || ""} onChange={(e) => setMapping({ ...mapping, [field]: e.target.value })}><option value="">— Non presente —</option>{headers.map((header) => <option value={header} key={header}>{header}</option>)}</select></label>)}</div>
+        <p className="mt-4 text-xs text-muted-foreground">Sconto aziende e Sconto officine sono considerati prezzi finali in euro. Le celle prezzo vuote restano senza prezzo. Le colonne non abbinate non cancellano i dati esistenti.</p>
+      </section>
+      <section className="overflow-hidden rounded-xl border bg-card">
+        <div className="p-5"><h2 className="font-semibold">Anteprima · {rows.length} righe</h2><p className="mt-1 text-sm text-muted-foreground">Prime 5 righe. Mantieni i codici come testo nell’Excel; separa i cross-reference con punto e virgola o virgola.</p></div>
+        <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="bg-muted/40"><tr>{["Nostro codice", "Codice fornitore", "Cross-reference", "Barcode", "Vendita", "Aziende", "Officine", "Quantità"].map((label) => <th className="whitespace-nowrap px-4 py-3 font-medium" key={label}>{label}</th>)}</tr></thead><tbody>{prepared.slice(0, 5).map(({ draft, error: rowError }, index) => <tr className="border-t" key={index}>{rowError ? <td className="px-4 py-3 text-destructive" colSpan={8}>{rowError}</td> : <>{[draft?.internal_code, draft?.supplierCode, draft?.crossReferences?.join("; "), draft?.barcode, ...["Prezzo vendita", "Sconto aziende", "Sconto officine"].map((name) => { const price = draft?.prices?.find((p) => p.name === name); return price ? new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" }).format(price.amount) : undefined; }), draft?.stockQuantity].map((value, cell) => <td className="whitespace-nowrap px-4 py-3" key={cell}>{value ?? "—"}</td>)}</>}</tr>)}</tbody></table></div>
+        <div className="p-5"><p className="text-sm text-muted-foreground">La quantità inizializza i prodotti nuovi. Gli aggiornamenti non sovrascrivono la giacenza calcolata; per rettificarla usa Magazzino.</p>{validationError && <p className="mt-2 text-sm text-destructive">{validationError}</p>}<Button className="mt-4" onClick={runImport} disabled={loading || !mapping.internal_code || Boolean(validationError)}>{loading ? "Importazione in corso…" : "Conferma importazione"}</Button></div>
+      </section>
+    </>}
+    {message && <Alert><AlertDescription>{message}</AlertDescription></Alert>}
+    {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
+  </div>;
 }
