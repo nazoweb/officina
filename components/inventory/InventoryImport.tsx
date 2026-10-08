@@ -60,7 +60,7 @@ export function InventoryImport() {
   return <div className="space-y-5">
     <section className="rounded-xl border bg-card p-5">
       <label className="block text-sm font-semibold">File Excel<Input className="mt-3" type="file" accept=".xlsx,.xls" disabled={loading} onChange={(e) => selectFile(e.target.files?.[0])} /></label>
-      <p className="mt-2 text-xs text-muted-foreground">Colonne supportate: CODICE FORNITORE, NOSTRO CODICE, CROSS REFERENCE, PREZZO VENDITA, SCONTO AZIENDE, SCONTO OFFICINE, CODICE A BARRE, QUANTITÀ. Viene letto il primo foglio.</p>
+      <p className="mt-2 text-xs text-muted-foreground">Colonne supportate: CODICE FORNITORE, NOSTRO CODICE, CROSS REFERENCE, PREZZO VENDITA, SCONTO AZIENDE, SCONTO OFFICINE, QUANTITÀ. Viene letto il primo foglio. Il barcode viene generato dal nostro codice; la colonna CODICE A BARRE dell’Excel viene ignorata.</p>
     </section>
     <section className="rounded-xl border border-dashed bg-muted/20 p-5">
       <h2 className="font-semibold">Migra archivio precedente</h2>

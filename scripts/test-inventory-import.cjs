@@ -22,7 +22,14 @@ const rows = XLSX.utils.sheet_to_json(reread.Sheets.Prodotti, { defval: '', raw:
 const draft = importedDraft(rows[0], mapping, headers);
 assert.equal(draft.internal_code, '09-0001');
 assert.equal(draft.supplierCode, 'PS171040');
-assert.equal(draft.barcode, '0012345678905');
+assert.equal(draft.barcode, '09-0001');
+assert.equal(importedDraft({ 'NOSTRO CODICE': ' 05-0001 ' }, mapping, headers).barcode, '05-0001');
+// Excel error cells are read as empty: the barcode still comes from our code.
+const errorSheet = XLSX.utils.aoa_to_sheet([headers, ['251687', '05-0001']]);
+errorSheet.G2 = { t: 'e', v: 15 };
+const errorRows = XLSX.utils.sheet_to_json(errorSheet, { defval: '', raw: false });
+assert.equal(errorRows[0]['CODICE A BARRE'], '');
+assert.equal(importedDraft(errorRows[0], mapping, headers).barcode, '05-0001');
 assert.deepEqual(draft.crossReferences, ['594651', '594774']);
 assert.deepEqual(draft.prices, [{ name: 'Prezzo vendita', amount: 0 }, { name: 'Sconto aziende', amount: 40 }]);
 assert.equal(draft.name, undefined);
@@ -65,6 +72,7 @@ Module._load = originalLoad;
   const identifiers = queries.find(q => q.table === 'product_identifiers').values;
   assert(identifiers.some(i => i.kind === 'supplier_code' && i.normalized_value === 'PS171040'));
   assert(identifiers.some(i => i.kind === 'cross_reference' && i.normalized_value === '594774'));
+  assert(identifiers.some(i => i.kind === 'barcode' && i.value === '09-0001'));
   queries.length = 0; existing = false;
   await upsertImportedProduct(draft);
   assert.equal(queries.find(q => q.table === 'products' && q.action === 'insert').values.stock_quantity, 12);
