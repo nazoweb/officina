@@ -1,0 +1,18 @@
+"use client";
+import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
+import { listClients, listDocuments } from '@/lib/ddt/api';
+import type { BusinessClient, DeliveryDocument } from '@/types/ddt';
+import { documentLabel } from '@/types/ddt';
+import { money } from '@/lib/ddt/money';
+import { userErrorMessage } from '@/lib/user-errors';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+export function DocumentsList(){
+ const params=useSearchParams();const [documents,setDocuments]=useState<DeliveryDocument[]>([]);const [clients,setClients]=useState<BusinessClient[]>([]);const [client,setClient]=useState(params.get('cliente')||'');const [number,setNumber]=useState('');const [from,setFrom]=useState('');const [to,setTo]=useState('');const [busy,setBusy]=useState(true);const [error,setError]=useState('');const sequence=useRef(0);
+ const reload=async()=>{const request=++sequence.current;setBusy(true);setError('');try{const found=await listDocuments({client,number,from,to});if(request===sequence.current)setDocuments(found);}catch(cause){if(request===sequence.current)setError(userErrorMessage(cause));}finally{if(request===sequence.current)setBusy(false);}};
+ useEffect(()=>{listClients().then(setClients).catch(cause=>setError(userErrorMessage(cause)));},[]);
+ useEffect(()=>{void reload();},[client]);
+ return <div className="space-y-5"><div className="flex flex-wrap gap-2"><Button asChild><Link href="/codici/ddt/nuovo">Nuovo documento</Link></Button><Button asChild variant="outline"><Link href="/codici/aziende">Gestisci aziende</Link></Button><Button asChild variant="outline"><Link href="/codici/impostazioni-documenti">Dati officina</Link></Button></div><form onSubmit={event=>{event.preventDefault();void reload();}} className="grid gap-3 rounded-xl border p-4 sm:grid-cols-2 lg:grid-cols-5"><label className="text-sm font-medium">Azienda<select aria-label="Filtra azienda" className="mt-1.5 h-9 w-full rounded-md border bg-background px-3" value={client} onChange={event=>setClient(event.target.value)}><option value="">Tutte le aziende</option>{clients.map(client=><option key={client.id} value={client.id}>{client.name}</option>)}</select></label><label className="text-sm font-medium">Numero<Input className="mt-1.5" value={number} inputMode="numeric" onChange={event=>setNumber(event.target.value)} placeholder="Es. 12"/></label><label className="text-sm font-medium">Dal<Input className="mt-1.5" type="date" value={from} onChange={event=>setFrom(event.target.value)}/></label><label className="text-sm font-medium">Al<Input className="mt-1.5" type="date" value={to} onChange={event=>setTo(event.target.value)}/></label><Button className="self-end" disabled={busy}>{busy?'Caricamento…':'Cerca documenti'}</Button></form>{error&&<p role="alert" className="text-destructive">{error}</p>}{documents.map(doc=><Link key={doc.id} href={`/codici/ddt/${doc.id}`} className="block rounded-xl border p-4 transition-colors hover:bg-muted/30"><div className="flex flex-wrap justify-between gap-3"><div><p className="text-xs text-muted-foreground">{doc.status==='draft'?'Bozza':doc.status==='void'?'Annullato':'Emesso'} · {new Intl.DateTimeFormat('it-IT').format(new Date(doc.document_date+'T12:00:00'))}</p><h2 className="mt-1 font-semibold">{documentLabel(doc)} · {doc.client_snapshot.name}</h2></div><span className="font-semibold">{money(doc.total)}</span></div></Link>)}{!busy&&!error&&!documents.length&&<p className="text-sm text-muted-foreground">Nessun documento trovato.</p>}</div>;
+}

@@ -2,22 +2,29 @@
 
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { normalizeCode } from "@/lib/codici/normalizeCode";
-import type { OrderDetail, OrderSummary, Product, ProductDraft, IdentifierKind } from "@/types/inventory";
+import type { OrderDetail, OrderSummary, Product, ProductDraft } from "@/types/inventory";
+
+import { UserFacingError } from "@/lib/user-errors";
+import { tracked } from "@/lib/inventory/activity";
 
 const PRODUCT_SELECT = "*, product_identifiers(*), product_prices(*, price_list:price_lists(id, name, sort_order))";
 
 function throwIfError(error: { message: string } | null) {
-  if (error) throw new Error(error.message);
+  if (error) throw error;
 }
 
-export async function listProducts(): Promise<Product[]> {
+async function listProductsImpl(): Promise<Product[]> {
   const supabase = createSupabaseBrowserClient();
-  const { data, error } = await supabase.from("products").select(PRODUCT_SELECT).order("internal_code");
-  throwIfError(error);
-  return (data ?? []) as Product[];
+  const products: Product[] = [];
+  for (let offset = 0; ; offset += 500) {
+    const { data, error } = await supabase.from("products").select(PRODUCT_SELECT).eq("active", true).order("internal_code").range(offset, offset + 499);
+    throwIfError(error);
+    products.push(...(data ?? []) as Product[]);
+    if ((data?.length ?? 0) < 500) return products;
+  }
 }
 
-export async function findProductsByCode(rawCode: string): Promise<Product[]> {
+async function findProductsByCodeImpl(rawCode: string): Promise<Product[]> {
   const normalized = normalizeCode(rawCode);
   if (!normalized) return [];
   const supabase = createSupabaseBrowserClient();
@@ -33,86 +40,80 @@ export async function findProductsByCode(rawCode: string): Promise<Product[]> {
   return (data ?? []) as Product[];
 }
 
-export async function createProduct(draft: ProductDraft): Promise<Product> {
+async function getProductImpl(id: string): Promise<Product> {
   const supabase = createSupabaseBrowserClient();
-  const internalCode = normalizeCode(draft.internal_code);
-  if (!internalCode || !draft.name?.trim()) throw new Error("Codice prodotto e nome sono obbligatori.");
-  const { data: product, error } = await supabase.from("products").insert({
-    internal_code: internalCode,
-    name: draft.name.trim(),
-    description: draft.description?.trim() ?? "",
-    brand: draft.brand?.trim() ?? "",
-    category: draft.category?.trim() ?? "",
-    location: draft.location?.trim() ?? "",
-    unit: draft.unit?.trim() || "pz",
-    stock_quantity: draft.stockQuantity ?? 0,
-    minimum_stock: draft.minimumStock ?? null,
-    supplier: draft.supplier?.trim() ?? "",
-    notes: draft.notes?.trim() ?? "",
-  }).select().single();
+  const { data, error } = await supabase.from("products").select(PRODUCT_SELECT).eq("id", id).single();
   throwIfError(error);
-
-  const codes: Array<{ kind: IdentifierKind; value?: string }> = [
-    { kind: "internal_code", value: internalCode },
-    { kind: "barcode", value: draft.barcode },
-    { kind: "supplier_code", value: draft.supplierCode },
-    { kind: "mav", value: draft.mav },
-    ...(draft.crossReferences ?? []).map((value) => ({ kind: "cross_reference" as const, value })),
-  ];
-  const identifiers = codes
-    .map(({ kind, value }) => ({ kind, value: String(value ?? "").trim() }))
-    .filter(({ value }) => Boolean(value))
-    .map(({ kind, value }) => ({ product_id: product.id, kind, value, normalized_value: normalizeCode(value) }));
-  const { error: identifierError } = await supabase.from("product_identifiers").insert(identifiers);
-  throwIfError(identifierError);
-
-  if ((draft.stockQuantity ?? 0) !== 0) {
-    const { error: movementError } = await supabase.from("inventory_movements").insert({
-      product_id: product.id, delta: draft.stockQuantity, reason: "initial_import", note: "Creazione prodotto"
-    });
-    throwIfError(movementError);
-  }
-  return { ...product, product_identifiers: identifiers as Product["product_identifiers"], product_prices: [] } as Product;
+  return data as Product;
 }
 
-export async function upsertImportedProduct(draft: ProductDraft, source = "Import Excel") {
+async function saveProductImpl(draft: ProductDraft, product?: Product): Promise<string> {
   const supabase = createSupabaseBrowserClient();
-  const internalCode = normalizeCode(draft.internal_code);
-  if (!internalCode) throw new Error("Una riga non contiene il codice prodotto interno.");
-  const { data: existing, error: existingError } = await supabase.from("products").select("id").eq("internal_code", internalCode).maybeSingle();
-  throwIfError(existingError);
-  // Unmapped columns must not clear information already stored on a product.
-  const values = {
-    internal_code: internalCode,
-    ...(draft.name !== undefined && { name: draft.name.trim() }),
-    ...(draft.description !== undefined && { description: draft.description.trim() }),
-    ...(draft.brand !== undefined && { brand: draft.brand.trim() }),
-    ...(draft.category !== undefined && { category: draft.category.trim() }),
-    ...(draft.location !== undefined && { location: draft.location.trim() }),
-    ...(draft.unit !== undefined && { unit: draft.unit.trim() || "pz" }),
-    ...(draft.minimumStock !== undefined && { minimum_stock: draft.minimumStock }),
-    ...(draft.supplier !== undefined && { supplier: draft.supplier.trim() }),
-    ...(draft.notes !== undefined && { notes: draft.notes.trim() }),
-  };
-  const { data: product, error } = existing
-    ? await supabase.from("products").update(values).eq("id", existing.id).select().single()
-    : await supabase.from("products").insert({ ...values, stock_quantity: draft.stockQuantity ?? 0 }).select().single();
+  const { data, error } = await supabase.rpc("save_catalogue_product", {
+    p_product_id: product?.id ?? null, p_draft: draft, p_expected_updated_at: product?.updated_at ?? null,
+  });
+  if (error?.code === "23505") { const message = new UserFacingError("Codice prodotto già presente oppure nomi di listino duplicati. Scegli un codice o un nome diverso e riprova."); Object.assign(message, { code: error.code, cause: error }); throw message; }
   throwIfError(error);
-  const codes: Array<{ kind: IdentifierKind; value?: string }> = [{ kind: "internal_code", value: internalCode }, { kind: "supplier_code", value: draft.supplierCode }, { kind: "barcode", value: draft.barcode }, { kind: "mav", value: draft.mav }, ...(draft.crossReferences ?? []).map((value) => ({ kind: "cross_reference" as const, value }))];
-  const identifiers = codes.map(({ kind, value }) => ({ kind, value: String(value ?? "").trim() })).filter(({ value }) => Boolean(value)).map(({ kind, value }) => ({ product_id: product.id, kind, value, normalized_value: normalizeCode(value) }));
-  if (identifiers.length) { const { error: identifierError } = await supabase.from("product_identifiers").upsert(identifiers, { onConflict: "product_id,normalized_value", ignoreDuplicates: true }); throwIfError(identifierError); }
-  for (const price of draft.prices ?? []) {
-    if (!Number.isFinite(price.amount)) continue;
-    const { data: list, error: listError } = await supabase.from("price_lists").upsert({ name: price.name.trim() || "Listino" }, { onConflict: "name" }).select().single();
-    throwIfError(listError);
-    const { error: priceError } = await supabase.from("product_prices").upsert({ product_id: product.id, price_list_id: list.id, amount: price.amount }, { onConflict: "product_id,price_list_id" });
-    throwIfError(priceError);
-  }
-  if (!existing && (draft.stockQuantity ?? 0) !== 0) { const { error: movementError } = await supabase.from("inventory_movements").insert({ product_id: product.id, delta: draft.stockQuantity, reason: "initial_import", note: source }); throwIfError(movementError); }
-  return { created: !existing, productId: product.id };
+  return data as string;
 }
 
-export async function createOrder(name: string, notes = ""): Promise<OrderSummary> {
+async function createProductImpl(draft: ProductDraft): Promise<Product> {
+  return getProduct(await saveProduct(draft));
+}
+
+async function deleteProductImpl(id: string) {
+  const { data, error } = await createSupabaseBrowserClient().from("products").delete().eq("id", id).select("id").single();
+  throwIfError(error);
+  if (!data) throw new UserFacingError("Il prodotto non esiste più.");
+}
+
+async function listCategoriesImpl(): Promise<string[]> {
+  const { data, error } = await createSupabaseBrowserClient().from("product_categories").select("name").order("name");
+  throwIfError(error);
+  return (data ?? []).map((category) => category.name);
+}
+
+async function createCategoryImpl(name: string) {
+  if (!name.trim()) throw new UserFacingError("Inserisci il nome della categoria.");
+  const { error } = await createSupabaseBrowserClient().from("product_categories").insert({ name: name.trim() });
+  if (error?.code === "23505") throw new UserFacingError("Questa categoria esiste già.");
+  throwIfError(error);
+}
+
+async function renameCategoryImpl(name: string, newName: string) {
+  const { error } = await createSupabaseBrowserClient().rpc("rename_product_category", { p_name: name, p_new_name: newName.trim() });
+  if (error?.code === "23505") throw new UserFacingError("Questo nome è già usato da un’altra categoria.");
+  throwIfError(error);
+}
+
+async function deleteCategoryImpl(name: string, deleteProducts: boolean, expectedCount: number) {
+  const { error } = await createSupabaseBrowserClient().rpc("delete_product_category", { p_name: name, p_delete_products: deleteProducts, p_expected_count: expectedCount });
+  throwIfError(error);
+}
+
+async function assignProductsCategoryImpl(ids: string[], category: string) {
+  if (!ids.length) throw new UserFacingError("Seleziona almeno un prodotto.");
+  const { error } = await createSupabaseBrowserClient().from("products").update({ category: category.trim() }).in("id", ids);
+  throwIfError(error);
+}
+
+async function updateOrderImpl(order: OrderSummary, name: string, notes: string, status = order.status) {
+  const { error } = await createSupabaseBrowserClient().rpc("manage_order", { p_order_id: order.id, p_name: name, p_notes: notes, p_status: status });
+  throwIfError(error);
+}
+
+async function deleteOrderImpl(id: string, restoreStock: boolean) {
+  const { error } = await createSupabaseBrowserClient().rpc("delete_catalogue_order", { p_order_id: id, p_restore_stock: restoreStock });
+  throwIfError(error);
+}
+
+async function upsertImportedProductImpl(draft: ProductDraft, source = "Import Excel") {
+  const { data, error } = await createSupabaseBrowserClient().rpc("import_catalogue_product", { p_draft: draft, p_source: source });
+  throwIfError(error);
+  return data as { created: boolean; productId: string };
+}
+
+async function createOrderImpl(name: string, notes = ""): Promise<OrderSummary> {
   const supabase = createSupabaseBrowserClient();
   const { data: user } = await supabase.auth.getUser();
   const { data, error } = await supabase.from("orders").insert({ name: name.trim(), notes: notes.trim(), created_by: user.user?.id }).select().single();
@@ -120,43 +121,65 @@ export async function createOrder(name: string, notes = ""): Promise<OrderSummar
   return data as OrderSummary;
 }
 
-export async function listOrders(): Promise<OrderSummary[]> {
+async function listOrdersImpl(): Promise<OrderSummary[]> {
   const supabase = createSupabaseBrowserClient();
   const { data, error } = await supabase.from("orders").select("*, order_items(quantity)").order("updated_at", { ascending: false });
   throwIfError(error);
   return (data ?? []) as OrderSummary[];
 }
 
-export async function getOrder(id: string): Promise<OrderDetail> {
+async function getOrderImpl(id: string): Promise<OrderDetail> {
   const supabase = createSupabaseBrowserClient();
   const { data, error } = await supabase.from("orders").select(`*, order_items(*, product:products(${PRODUCT_SELECT}))`).eq("id", id).single();
   throwIfError(error);
   return data as OrderDetail;
 }
 
-export async function scanProductIntoOrder(orderId: string, productId: string) {
+async function scanProductIntoOrderImpl(orderId: string, productId: string) {
   const supabase = createSupabaseBrowserClient();
   const { data, error } = await supabase.rpc("scan_order_item", { p_order_id: orderId, p_product_id: productId });
   throwIfError(error);
   return data?.[0];
 }
 
-export async function setOrderItemQuantity(itemId: string, quantity: number) {
+async function setOrderItemQuantityImpl(itemId: string, quantity: number) {
   const supabase = createSupabaseBrowserClient();
   const { data, error } = await supabase.rpc("set_order_item_quantity", { p_order_item_id: itemId, p_quantity: quantity });
   throwIfError(error);
   return data?.[0];
 }
 
-export async function closeOrder(id: string) {
+async function closeOrderImpl(id: string) {
   const supabase = createSupabaseBrowserClient();
   const { error } = await supabase.rpc("close_order", { p_order_id: id });
   throwIfError(error);
 }
 
-export async function adjustStock(productId: string, delta: number, note = "") {
+async function adjustStockImpl(productId: string, delta: number, note = "") {
   const supabase = createSupabaseBrowserClient();
   const { data, error } = await supabase.rpc("adjust_product_stock", { p_product_id: productId, p_delta: delta, p_note: note });
   throwIfError(error);
   return data as number;
 }
+
+export const listProducts = tracked("listProducts", listProductsImpl);
+export const findProductsByCode = tracked("findProductsByCode", findProductsByCodeImpl);
+export const getProduct = tracked("getProduct", getProductImpl);
+export const saveProduct = tracked("saveProduct", saveProductImpl);
+export const createProduct = tracked("createProduct", createProductImpl);
+export const deleteProduct = tracked("deleteProduct", deleteProductImpl);
+export const listCategories = tracked("listCategories", listCategoriesImpl);
+export const createCategory = tracked("createCategory", createCategoryImpl);
+export const renameCategory = tracked("renameCategory", renameCategoryImpl);
+export const deleteCategory = tracked("deleteCategory", deleteCategoryImpl);
+export const assignProductsCategory = tracked("assignProductsCategory", assignProductsCategoryImpl);
+export const updateOrder = tracked("updateOrder", updateOrderImpl);
+export const deleteOrder = tracked("deleteOrder", deleteOrderImpl);
+export const upsertImportedProduct = tracked("upsertImportedProduct", upsertImportedProductImpl);
+export const createOrder = tracked("createOrder", createOrderImpl);
+export const listOrders = tracked("listOrders", listOrdersImpl);
+export const getOrder = tracked("getOrder", getOrderImpl);
+export const scanProductIntoOrder = tracked("scanProductIntoOrder", scanProductIntoOrderImpl);
+export const setOrderItemQuantity = tracked("setOrderItemQuantity", setOrderItemQuantityImpl);
+export const closeOrder = tracked("closeOrder", closeOrderImpl);
+export const adjustStock = tracked("adjustStock", adjustStockImpl);

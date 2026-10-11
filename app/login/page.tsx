@@ -1,6 +1,9 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { userErrorMessage, UserFacingError } from "@/lib/user-errors";
+
+
+import { Suspense, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,6 +11,7 @@ import { createSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabas
 import { LockKeyhole } from "lucide-react";
 
 function LoginForm() {
+  const pending = useRef(false);
   const router = useRouter();
   const params = useSearchParams();
   const [email, setEmail] = useState("");
@@ -17,9 +21,9 @@ function LoginForm() {
   const [creating, setCreating] = useState(false);
 
   const submit = async (event: React.FormEvent) => {
-    event.preventDefault(); setError(""); setLoading(true);
+    event.preventDefault(); if (pending.current) return; pending.current = true; setError(""); setLoading(true);
     try {
-      if (!isSupabaseConfigured) throw new Error("Manca la configurazione Supabase in .env.local.");
+      if (!isSupabaseConfigured) throw new UserFacingError("Il sito non è pronto per l’accesso. Contatta l’assistenza.");
       const supabase = createSupabaseBrowserClient();
       const result = creating
         ? await supabase.auth.signUp({ email, password })
@@ -27,8 +31,8 @@ function LoginForm() {
       if (result.error) throw result.error;
       if (creating && !result.data.session) setError("Account creato: controlla l’email per confermare l’accesso.");
       else router.replace(params.get("next") || "/codici");
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "Impossibile accedere."); }
-    finally { setLoading(false); }
+    } catch (cause) { setError(userErrorMessage(cause, "Impossibile accedere.")); }
+    finally { pending.current = false; setLoading(false); }
   };
 
   return <main className="min-h-screen grid place-items-center bg-muted/30 p-4"><form onSubmit={submit} className="w-full max-w-sm rounded-xl border bg-card p-6 shadow-sm space-y-5">

@@ -42,40 +42,40 @@ assert.throws(() => importedDraft({ ...rows[0], QUANTITÀ: '1,5' }, mapping, hea
 assert.throws(() => importedDraft({ ...rows[0], 'SCONTO AZIENDE': '-1' }, mapping, headers));
 assert.equal(importedDraft({ ...rows[0], 'NOSTRO CODICE': '' }, mapping, headers), null);
 
-// Exercise the persistence queries without touching the live database.
-let existing = true;
-const queries = [];
-const client = { from(table) {
-  const chain = {
-    select() { return chain; }, eq() { return chain; },
-    maybeSingle: async () => ({ data: existing ? { id: 'product-1' } : null, error: null }),
-    update(values) { queries.push({ table, action: 'update', values }); return chain; },
-    insert(values) { queries.push({ table, action: 'insert', values }); return chain; },
-    upsert(values) { queries.push({ table, action: 'upsert', values }); return chain; },
-    single: async () => ({ data: { id: 'product-1' }, error: null }),
-    then(resolve) { return Promise.resolve({ data: null, error: null }).then(resolve); },
-  };
-  return chain;
-} };
+// Import edge cases are rejected before any request reaches the database.
+const { validateImportRows } = require('../lib/inventory/import.ts');
+const prepared = draft => ({ draft, error: '' });
+assert.match(validateImportRows([prepared(draft), prepared({ ...draft, internal_code: ' 09-0001 ' })], mapping), /righe 2 e 3/);
+assert.match(validateImportRows([prepared(null)], mapping), /Non ci sono prodotti/);
+assert.match(validateImportRows([prepared(draft)], { internal_code: 'CODICE', name: 'CODICE' }), /stessa colonna/);
+assert.throws(() => importedDraft({ ...rows[0], QUANTITÀ: '999999999999999999' }, mapping, headers));
+assert.throws(() => importedDraft({ ...rows[0], MINIMO: '-1' }, { ...mapping, minimum_stock: 'MINIMO' }, [...headers, 'MINIMO']));
+assert.throws(() => parseImportNumber('9'.repeat(400)));
+const { userErrorMessage, UserFacingError } = require('../lib/user-errors.ts');
+for (const raw of [new Error('ambiguous id'), { code: '42702', message: 'column reference "id" is ambiguous' }, new Error('Unexpected SQL relation xyz'), { code: '23505', message: 'duplicate key value violates unique constraint' }]) {
+  assert(!/ambiguous|SQL|constraint|xyz/.test(userErrorMessage(raw)));
+}
+assert.match(userErrorMessage({ code: 'invalid_credentials' }), /Email o password/);
+assert.match(userErrorMessage(new TypeError('Failed to fetch')), /connessione/);
+assert.match(userErrorMessage(new UserFacingError('Controlla il codice.', 'ABC12345')), /ABC12345/);
+// Exercise the transactional persistence boundary with a fake database client.
+const calls = [];
+const client = { rpc: async (name, values) => { calls.push({ name, values }); return { data: { created: false, productId: 'product-1' }, error: null }; } };
 const originalLoad = Module._load;
 Module._load = function(name, parent, isMain) {
   if (name === '@/lib/supabase/client') return { createSupabaseBrowserClient: () => client };
   if (name === '@/lib/codici/normalizeCode') return require('../lib/codici/normalizeCode.ts');
+  if (name === '@/lib/user-errors') return require('../lib/user-errors.ts');
+  if (name === '@/lib/inventory/activity') return { tracked: (_action, fn) => fn };
   return originalLoad.call(this, name, parent, isMain);
 };
 const { upsertImportedProduct } = require('../lib/inventory/api.ts');
 Module._load = originalLoad;
 (async () => {
-  await upsertImportedProduct(draft);
-  const update = queries.find(q => q.table === 'products' && q.action === 'update');
-  assert.deepEqual(update.values, { internal_code: '09-0001' });
-  const identifiers = queries.find(q => q.table === 'product_identifiers').values;
-  assert(identifiers.some(i => i.kind === 'supplier_code' && i.normalized_value === 'PS171040'));
-  assert(identifiers.some(i => i.kind === 'cross_reference' && i.normalized_value === '594774'));
-  assert(identifiers.some(i => i.kind === 'barcode' && i.value === '09-0001'));
-  queries.length = 0; existing = false;
-  await upsertImportedProduct(draft);
-  assert.equal(queries.find(q => q.table === 'products' && q.action === 'insert').values.stock_quantity, 12);
-  assert.equal(queries.find(q => q.table === 'inventory_movements').values.delta, 12);
-  console.log('OK: Excel cliente, codici, prezzi EUR, celle vuote e query di creazione/aggiornamento.');
+  const result = await upsertImportedProduct(draft);
+  assert.equal(result.created, false);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].name, 'import_catalogue_product');
+  assert.deepEqual(calls[0].values.p_draft, draft);
+  console.log('OK: Excel, barcode, importazione atomica, duplicati, numeri non validi e messaggi comprensibili.');
 })().catch(error => { console.error(error); process.exitCode = 1; });

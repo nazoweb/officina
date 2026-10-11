@@ -1,5 +1,7 @@
 "use client";
 
+import { userErrorMessage } from "@/lib/user-errors";
+
 import { useRef, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -10,17 +12,19 @@ import type { Product } from "@/types/inventory";
 import { EmptyProductState, ProductCard } from "./ProductCard";
 
 export function ProductSearch() {
+  const pending = useRef(false);
   const input = useRef<HTMLInputElement>(null);
   const [value, setValue] = useState("");
   const [products, setProducts] = useState<Product[] | null>(null);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const search = async (event?: React.FormEvent) => {
-    event?.preventDefault(); const code = value.trim(); if (!code) return;
-    setLoading(true); setMessage("");
+    event?.preventDefault(); const code = value.trim(); if (!code || pending.current) return;
+    pending.current = true;
+    setLoading(true); setMessage(""); setProducts(null);
     try { setProducts(await findProductsByCode(code)); }
-    catch (cause) { setMessage(cause instanceof Error ? cause.message : "Errore di ricerca."); }
-    finally { setLoading(false); setTimeout(() => input.current?.focus(), 0); }
+    catch (cause) { setMessage(userErrorMessage(cause, "Errore di ricerca.")); }
+    finally { pending.current = false; setLoading(false); setTimeout(() => input.current?.focus(), 0); }
   };
   return <div className="space-y-6"><form onSubmit={search} className="rounded-xl border bg-card p-4 sm:p-5"><div className="mb-3 flex items-center gap-2 text-sm font-medium"><ScanBarcode className="h-4 w-4 text-primary" />Scansiona o inserisci un codice</div><div className="flex gap-2"><Input ref={input} value={value} onChange={(e) => setValue(e.target.value)} placeholder="Punta la pistola qui o digita un codice…" className="h-12 font-mono text-base" autoFocus disabled={loading} /><Button type="submit" className="h-12 px-5" disabled={loading || !value.trim()}><Search className="mr-2 h-4 w-4" />Cerca</Button></div><p className="mt-2 text-xs text-muted-foreground">Il lettore USB/Bluetooth invia il codice e Invio: la ricerca parte automaticamente.</p></form>
     {message && <Alert variant="destructive"><AlertDescription>{message}</AlertDescription></Alert>}

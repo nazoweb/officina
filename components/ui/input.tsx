@@ -1,3 +1,5 @@
+"use client"
+
 import * as React from 'react'
 
 import { cn } from '@/lib/utils'
@@ -14,6 +16,13 @@ function Input({ className, type, ...props }: React.ComponentProps<'input'>) {
         className,
       )}
       {...props}
+      onInvalid={event => {
+        const input = event.currentTarget;
+        const validity = input.validity;
+        input.setCustomValidity(validity.valueMissing ? "Compila questo campo per continuare." : validity.typeMismatch && type === "email" ? "Inserisci un indirizzo email valido, per esempio nome@azienda.it." : validity.rangeUnderflow ? `Inserisci un numero uguale o maggiore di ${input.min}.` : validity.rangeOverflow ? `Inserisci un numero uguale o minore di ${input.max}.` : validity.stepMismatch && input.step === "1" ? "Inserisci un numero intero, senza virgole." : validity.tooShort ? `Inserisci almeno ${input.minLength} caratteri.` : "Controlla questo campo e inserisci un valore valido.");
+        props.onInvalid?.(event);
+      }}
+      onInput={event => { event.currentTarget.setCustomValidity(""); props.onInput?.(event); }}
     />
   )
 }

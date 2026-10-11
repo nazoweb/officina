@@ -16,6 +16,7 @@ export interface ProductPrice {
 }
 
 export interface Product {
+  kind: "goods" | "service";
   id: string;
   internal_code: string;
   name: string;
@@ -29,6 +30,7 @@ export interface Product {
   supplier: string;
   notes: string;
   active: boolean;
+  updated_at: string;
   product_identifiers: ProductIdentifier[];
   product_prices: ProductPrice[];
 }
@@ -48,7 +50,7 @@ export interface OrderSummary {
 export interface OrderItem {
   id: string;
   order_id: string;
-  product_id: string;
+  product_id: string | null;
   quantity: number;
   product_name_snapshot: string;
   internal_code_snapshot: string;
@@ -61,6 +63,7 @@ export interface OrderDetail extends OrderSummary {
 }
 
 export interface ProductDraft {
+  kind?: "goods" | "service";
   internal_code: string;
   name?: string;
   supplierCode?: string;

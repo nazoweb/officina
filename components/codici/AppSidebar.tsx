@@ -15,9 +15,13 @@ import {
   SidebarMenuItem,
   SidebarSeparator,
 } from "@/components/ui/sidebar";
-import { Search, Boxes, ClipboardList, Upload, Plus } from "lucide-react";
+import { Search, Boxes, ClipboardList, Upload, Plus, History, FileText, Building2, Settings } from "lucide-react";
 
 const NAV_ITEMS = [
+  { href: "/codici/ddt", label: "DDT e consegne", icon: FileText, exact: false },
+  { href: "/codici/aziende", label: "Aziende", icon: Building2, exact: false },
+  { href: "/codici/impostazioni-documenti", label: "Dati officina", icon: Settings, exact: false },
+  { href: "/codici/attivita", label: "Registro attività", icon: History, exact: false },
   { href: "/codici", label: "Ricerca prodotto", icon: Search, exact: true },
   { href: "/codici/magazzino", label: "Magazzino", icon: Boxes, exact: false },
   { href: "/codici/ordini", label: "Liste ordini", icon: ClipboardList, exact: false },

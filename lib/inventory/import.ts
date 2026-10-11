@@ -1,3 +1,4 @@
+import { UserFacingError } from "../user-errors";
 import type { ProductDraft } from "@/types/inventory";
 import { parseCrossReferences } from "../codici/normalizeCode";
 
@@ -28,14 +29,16 @@ export function guessImportMapping(headers: string[]): ImportMapping {
 export function parseImportNumber(raw: unknown): number | undefined {
   if (raw === null || raw === undefined || String(raw).trim() === "") return undefined;
   if (typeof raw === "number") {
-    if (!Number.isFinite(raw)) throw new Error("Numero non valido.");
+    if (!Number.isFinite(raw)) throw new UserFacingError("Numero non valido.");
     return raw;
   }
   let value = String(raw).trim().replace(/EUR/gi, "").replace(/[€\s]/g, "");
   if (value.includes(",")) value = value.replace(/\./g, "").replace(",", ".");
   else if (/^[+-]?\d{1,3}(\.\d{3})+$/.test(value)) value = value.replace(/\./g, "");
-  if (!/^[+-]?\d+(\.\d+)?$/.test(value)) throw new Error(`Valore numerico non valido: ${String(raw)}.`);
-  return Number(value);
+  if (!/^[+-]?\d+(\.\d+)?$/.test(value)) throw new UserFacingError(`Valore numerico non valido: ${String(raw)}.`);
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) throw new UserFacingError("Il numero è troppo grande. Controlla il valore nell’Excel.");
+  return amount;
 }
 
 export function importedDraft(row: Record<string, unknown>, mapping: ImportMapping, headers: string[]): ProductDraft | null {
@@ -52,8 +55,12 @@ export function importedDraft(row: Record<string, unknown>, mapping: ImportMappi
   for (const [field, property] of [["stock", "stockQuantity"], ["minimum_stock", "minimumStock"]] as const) {
     if (!mapping[field]) continue;
     const amount = parseImportNumber(row[mapping[field]!]);
-    if (amount !== undefined && !Number.isInteger(amount)) throw new Error(`${importLabels[field]}: inserisci un numero intero.`);
-    if (amount !== undefined) draft[property] = amount;
+    if (amount !== undefined && !Number.isInteger(amount)) throw new UserFacingError(`${importLabels[field]}: inserisci un numero intero.`);
+    if (amount !== undefined) {
+      if (!Number.isSafeInteger(amount) || amount < -2147483648 || amount > 2147483647) throw new UserFacingError(`${importLabels[field]}: il numero è troppo grande.`);
+      if (field === "minimum_stock" && amount < 0) throw new UserFacingError("La scorta minima non può essere negativa.");
+      draft[property] = amount;
+    }
   }
   const prices: NonNullable<ProductDraft["prices"]> = [];
   const mappedPriceColumns = new Set<string>();
@@ -63,17 +70,31 @@ export function importedDraft(row: Record<string, unknown>, mapping: ImportMappi
     mappedPriceColumns.add(header);
     const amount = parseImportNumber(row[header]);
     if (amount !== undefined) {
-      if (amount < 0) throw new Error(`${name}: il prezzo non può essere negativo.`);
+      if (amount < 0) throw new UserFacingError(`${name}: il prezzo non può essere negativo.`);
       prices.push({ name, amount });
     }
   }
   for (const header of headers.filter((h) => /prezzo|listino|price/i.test(h) && !mappedPriceColumns.has(h))) {
     const amount = parseImportNumber(row[header]);
     if (amount !== undefined) {
-      if (amount < 0) throw new Error(`${header}: il prezzo non può essere negativo.`);
+      if (amount < 0) throw new UserFacingError(`${header}: il prezzo non può essere negativo.`);
       prices.push({ name: header, amount });
     }
   }
   draft.prices = prices;
   return draft;
+}
+
+export function validateImportRows(rows: Array<{ draft: ProductDraft | null; error: string }>, mapping: ImportMapping): string | undefined {
+  const mapped = Object.values(mapping).filter(Boolean);
+  if (new Set(mapped).size !== mapped.length) return "La stessa colonna è abbinata a più campi. Usa una colonna diversa per ogni campo.";
+  const seen = new Map<string, number>();
+  for (const [index, row] of rows.entries()) {
+    if (row.error) return row.error;
+    if (!row.draft) continue;
+    const code = row.draft.internal_code.trim().toUpperCase();
+    if (seen.has(code)) return `Il codice ${code} compare nelle righe ${seen.get(code)} e ${index + 2}. Mantieni una sola riga per prodotto, poi carica nuovamente il file.`;
+    seen.set(code, index + 2);
+  }
+  if (!seen.size) return "Non ci sono prodotti da importare. Controlla la colonna del nostro codice e compila almeno una riga.";
 }

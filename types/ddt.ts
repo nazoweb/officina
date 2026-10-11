@@ -1,0 +1,9 @@
+export type Party = { name: string; vat_number: string; tax_code: string; address: string; postcode: string; city: string; province: string; country: string; email: string; phone: string };
+export type BusinessClient = Party & { id: string; delivery_address: string; active: boolean; updated_at: string };
+export type DeliverySettings = Party & { id: boolean; fiscal_verified: boolean; updated_at: string };
+export type Vehicle = { brand?: string; model?: string; plate?: string; vin?: string; kilometres?: string };
+export type DeliveryLine = { product_id: string; kind: 'goods' | 'service'; code: string; description: string; unit: string; quantity: string; unit_price: string; discount: string; line_total?: string };
+export type DeliveryDocument = { id: string; client_id: string | null; kind: 'ddt' | 'work'; status: 'draft' | 'issued' | 'void'; number: number | null; year: number | null; document_date: string; client_snapshot: Party; emitter_snapshot: Party; vehicle: Vehicle; delivery_address: string; transport_reason: string; carrier: string; transport_at: string | null; packages: number | null; notes: string; lines: DeliveryLine[]; total: string; version: number; created_at: string; updated_at: string; cancellation_reason: string | null };
+export type DeliveryDraft = Pick<DeliveryDocument, 'client_id' | 'document_date' | 'vehicle' | 'delivery_address' | 'transport_reason' | 'carrier' | 'notes' | 'lines'> & { transport_at: string | null; packages: string | null };
+export const blankParty: Party = { name: '', vat_number: '', tax_code: '', address: '', postcode: '', city: '', province: '', country: 'Italia', email: '', phone: '' };
+export function documentLabel(document: Pick<DeliveryDocument, 'kind' | 'number' | 'year'>) { return document.number ? `${document.kind === 'ddt' ? 'DDT' : 'LAV'} ${document.number}/${document.year}` : 'Bozza'; }
