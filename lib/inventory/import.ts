@@ -41,20 +41,25 @@ export function parseImportNumber(raw: unknown): number | undefined {
   return amount;
 }
 
-export function importedDraft(row: Record<string, unknown>, mapping: ImportMapping, headers: string[]): ProductDraft | null {
+// `raw` holds the unformatted cell values: a formatted cell such as "1,234.50"
+// must not be read as 1.2345, nor "3" when the cell actually contains 2.6.
+export function importedDraft(row: Record<string, unknown>, mapping: ImportMapping, headers: string[], raw: Record<string, unknown> = {}): ProductDraft | null {
   const text = (field: ImportField) => mapping[field] ? String(row[mapping[field]!] ?? "").trim() : undefined;
+  const cell = (header: string) => typeof raw[header] === "number" ? raw[header] : row[header];
   const code = text("internal_code");
   if (!code) return null;
   const draft: ProductDraft = { internal_code: code, barcode: code };
   const textFields = { name: "name", supplier_code: "supplierCode", mav: "mav", brand: "brand", category: "category", location: "location", supplier: "supplier" } as const;
   for (const [field, property] of Object.entries(textFields)) {
     const value = text(field as ImportField);
-    if (value !== undefined) draft[property as typeof textFields[keyof typeof textFields]] = value;
+    // An empty cell never erases data already saved on the product.
+    if (value) draft[property as typeof textFields[keyof typeof textFields]] = value;
   }
-  if (mapping.cross) draft.crossReferences = parseCrossReferences(text("cross"));
+  const crossReferences = parseCrossReferences(text("cross"));
+  if (crossReferences.length) draft.crossReferences = crossReferences;
   for (const [field, property] of [["stock", "stockQuantity"], ["minimum_stock", "minimumStock"]] as const) {
     if (!mapping[field]) continue;
-    const amount = parseImportNumber(row[mapping[field]!]);
+    const amount = parseImportNumber(cell(mapping[field]!));
     if (amount !== undefined && !Number.isInteger(amount)) throw new UserFacingError(`${importLabels[field]}: inserisci un numero intero.`);
     if (amount !== undefined) {
       if (!Number.isSafeInteger(amount) || amount < -2147483648 || amount > 2147483647) throw new UserFacingError(`${importLabels[field]}: il numero è troppo grande.`);
@@ -68,14 +73,16 @@ export function importedDraft(row: Record<string, unknown>, mapping: ImportMappi
     const header = mapping[field];
     if (!header) continue;
     mappedPriceColumns.add(header);
-    const amount = parseImportNumber(row[header]);
+    const amount = parseImportNumber(cell(header));
     if (amount !== undefined) {
       if (amount < 0) throw new UserFacingError(`${name}: il prezzo non può essere negativo.`);
       prices.push({ name, amount });
     }
   }
-  for (const header of headers.filter((h) => /prezzo|listino|price/i.test(h) && !mappedPriceColumns.has(h))) {
-    const amount = parseImportNumber(row[header]);
+  // Standard price columns left on "Non presente" stay excluded instead of becoming a duplicate price list.
+  const standardPriceHeaders = new Set([...aliases.sale_price, ...aliases.company_price, ...aliases.workshop_price]);
+  for (const header of headers.filter((h) => /prezzo|listino|price/i.test(h) && !mappedPriceColumns.has(h) && !standardPriceHeaders.has(normalizedHeader(h)))) {
+    const amount = parseImportNumber(cell(header));
     if (amount !== undefined) {
       if (amount < 0) throw new UserFacingError(`${header}: il prezzo non può essere negativo.`);
       prices.push({ name: header, amount });

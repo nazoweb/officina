@@ -42,6 +42,24 @@ assert.throws(() => importedDraft({ ...rows[0], QUANTITÀ: '1,5' }, mapping, hea
 assert.throws(() => importedDraft({ ...rows[0], 'SCONTO AZIENDE': '-1' }, mapping, headers));
 assert.equal(importedDraft({ ...rows[0], 'NOSTRO CODICE': '' }, mapping, headers), null);
 
+// Formatted numbers use the real cell value: "1,234.50" is 1234.5, not 1.2345.
+const formatted = XLSX.utils.aoa_to_sheet([headers, ['F1', '09-0002', '', 1234.5, '', '', '', 1000], ['F2', '09-0003', '', 10, '', '', '', 2.6]]);
+formatted.D2.z = '#,##0.00'; formatted.H2.z = '#,##0'; formatted.H3.z = '0';
+const formattedBook = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(formattedBook, formatted, 'Prodotti');
+const formattedSheet = XLSX.read(XLSX.write(formattedBook, { type: 'buffer', bookType: 'xlsx' })).Sheets.Prodotti;
+const formattedText = XLSX.utils.sheet_to_json(formattedSheet, { defval: '', raw: false });
+const formattedRaw = XLSX.utils.sheet_to_json(formattedSheet, { defval: '', raw: true });
+const big = importedDraft(formattedText[0], mapping, headers, formattedRaw[0]);
+assert.deepEqual(big.prices, [{ name: 'Prezzo vendita', amount: 1234.5 }]);
+assert.equal(big.stockQuantity, 1000);
+assert.throws(() => importedDraft(formattedText[1], mapping, headers, formattedRaw[1]), /intero/);
+// Empty mapped cells must not erase saved data on reimport.
+const sparse = importedDraft({ 'NOSTRO CODICE': '09-0004', DESCRIZIONE: '', 'CROSS REFERENCE': '' }, { ...mapping, name: 'DESCRIZIONE' }, [...headers, 'DESCRIZIONE']);
+assert.equal(sparse.name, undefined);
+assert.equal(sparse.crossReferences, undefined);
+// A standard price column left unmapped is not imported as an extra price list.
+assert.deepEqual(importedDraft({ 'NOSTRO CODICE': '09-0005', 'PREZZO VENDITA': '12', 'PREZZO ACQUISTO': '8' }, { internal_code: 'NOSTRO CODICE' }, ['NOSTRO CODICE', 'PREZZO VENDITA', 'PREZZO ACQUISTO']).prices, [{ name: 'PREZZO ACQUISTO', amount: 8 }]);
+
 // Import edge cases are rejected before any request reaches the database.
 const { validateImportRows } = require('../lib/inventory/import.ts');
 const prepared = draft => ({ draft, error: '' });

@@ -17,6 +17,7 @@ export function InventoryImport() {
   const importing = useRef(false);
   const [headers, setHeaders] = useState<string[]>([]);
   const [rows, setRows] = useState<Record<string, unknown>[]>([]);
+  const [rawRows, setRawRows] = useState<Record<string, unknown>[]>([]);
   const [mapping, setMapping] = useState<ImportMapping>({});
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -25,15 +26,16 @@ export function InventoryImport() {
   const selectFile = async (file?: File) => {
     if (!file || importing.current) return;
     setLoading(true);
-    setError(""); setMessage(""); setRows([]); setHeaders([]);
+    setError(""); setMessage(""); setRows([]); setRawRows([]); setHeaders([]);
     try {
       if (file.size > 20 * 1024 * 1024) throw new UserFacingError("Il file è troppo grande. Dividilo in file più piccoli, fino a 20 MB ciascuno.");
       const book = XLSX.read(await file.arrayBuffer(), { type: "array" });
-      const parsed = XLSX.utils.sheet_to_json<Record<string, unknown>>(book.Sheets[book.SheetNames[0]], { defval: "", raw: false });
+      const sheet = book.Sheets[book.SheetNames[0]];
+      const parsed = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "", raw: false });
       if (parsed.length > 10000) throw new UserFacingError("Il file contiene troppe righe. Dividilo in file con al massimo 10.000 prodotti ciascuno.");
       const nextHeaders = Object.keys(parsed[0] ?? {});
       if (!nextHeaders.length) throw new UserFacingError("Il foglio è vuoto o non contiene intestazioni.");
-      setHeaders(nextHeaders); setRows(parsed); setMapping(guessImportMapping(nextHeaders));
+      setHeaders(nextHeaders); setRows(parsed); setRawRows(XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "", raw: true })); setMapping(guessImportMapping(nextHeaders));
       await recordActivity("importFile", "success", { rows: parsed.length, bytes: file.size });
     } catch (cause) { setError(userErrorMessage(cause, "Non riesco a leggere questo file. Scegli un file Excel valido con le intestazioni nella prima riga.")); await recordActivity("importFile", "error", {}, cause); }
     finally { setLoading(false); }
@@ -51,7 +53,7 @@ export function InventoryImport() {
     finally { importing.current = false; setLoading(false); }
   };
   const prepared = rows.map((row, index) => {
-    try { const draft = importedDraft(row, mapping, headers); if (draft && !mapping.category && category.trim()) draft.category = category.trim(); return { draft, error: "" }; }
+    try { const draft = importedDraft(row, mapping, headers, rawRows[index]); if (draft && !mapping.category && category.trim()) draft.category = category.trim(); return { draft, error: "" }; }
     catch (cause) { return { draft: null, error: `Riga ${index + 2}: ${userErrorMessage(cause, "Dati non validi.")}` }; }
   });
   const skippedRows = prepared.filter(row => !row.draft && !row.error).length;
