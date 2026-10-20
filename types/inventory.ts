@@ -28,6 +28,7 @@ export interface Product {
   stock_quantity: number;
   minimum_stock: number | null;
   supplier: string;
+  purchase_price: number | null;
   notes: string;
   active: boolean;
   updated_at: string;
@@ -78,6 +79,7 @@ export interface ProductDraft {
   stockQuantity?: number;
   minimumStock?: number | null;
   supplier?: string;
+  purchasePrice?: string | null;
   notes?: string;
   prices?: Array<{ name: string; amount: number }>;
 }

@@ -68,7 +68,7 @@ const errors = [];
       } else if (url.pathname.endsWith('/orders')) response = request.headers().accept?.includes('vnd.pgrst.object') ? order : [order];
       else if (url.pathname.endsWith('/save_catalogue_product')) {
         const draft = body.p_draft;
-        products = [{ ...makeProduct(), internal_code: draft.internal_code.toUpperCase(), name: draft.name, stock_quantity: draft.stockQuantity, category: draft.category }];
+        products = [{ ...makeProduct(), internal_code: draft.internal_code.toUpperCase(), name: draft.name, stock_quantity: draft.stockQuantity, category: draft.category, purchase_price: draft.purchasePrice == null ? null : Number(draft.purchasePrice) }];
         response = productId;
       } else if (url.pathname.endsWith('/rename_product_category')) {
         categories = categories.map(name => name === body.p_name ? body.p_new_name : name);
@@ -96,12 +96,38 @@ const errors = [];
     assert.equal(await page.getByLabel('Barcode automatico', { exact: false }).inputValue(), '05-0099');
     await page.getByLabel('Nome prodotto', { exact: true }).fill('Devio aggiornato');
     await page.getByLabel('Giacenza attuale', { exact: false }).fill('15');
+    const cost = page.getByLabel('Prezzo d’acquisto (€)', { exact: false });
+    for (const invalid of ['-1', '1,001', 'abc', '10000000000']) {
+      await cost.fill(invalid);
+      const before = calls.filter(call => call.path.endsWith('/save_catalogue_product')).length;
+      await page.getByRole('button', { name: 'Salva prodotto', exact: true }).click();
+      await page.getByRole('alert').filter({ hasText: 'Prezzo d’acquisto' }).waitFor();
+      assert.equal(calls.filter(call => call.path.endsWith('/save_catalogue_product')).length, before);
+    }
+    await cost.fill('73,25');
     await page.getByRole('button', { name: 'Salva prodotto', exact: true }).click();
     await page.waitForURL('**/codici/magazzino');
     await page.getByText('Devio aggiornato', { exact: true }).waitFor();
     const save = calls.find(call => call.path.endsWith('/save_catalogue_product'));
     assert.equal(save.body.p_product_id, productId);
     assert.equal(save.body.p_draft.stockQuantity, 15);
+    assert.equal(save.body.p_draft.purchasePrice, '73.25');
+    await page.getByText('Prezzo d’acquisto (uso interno):', { exact: true }).waitFor();
+    await page.emulateMedia({ media: 'print' });
+    assert.equal(await page.getByText('Prezzo d’acquisto (uso interno):', { exact: true }).isVisible(), false);
+    await page.emulateMedia({ media: 'screen' });
+    await page.getByRole('link', { name: 'Modifica', exact: true }).click();
+    assert.equal(await page.getByLabel('Prezzo d’acquisto (€)', { exact: false }).inputValue(), '73,25');
+    await page.getByLabel('Prezzo d’acquisto (€)', { exact: false }).fill('0');
+    await page.getByRole('button', { name: 'Salva prodotto', exact: true }).click();
+    await page.waitForURL('**/codici/magazzino');
+    await page.getByRole('link', { name: 'Modifica', exact: true }).click();
+    assert.equal(await page.getByLabel('Prezzo d’acquisto (€)', { exact: false }).inputValue(), '0');
+    await page.getByLabel('Prezzo d’acquisto (€)', { exact: false }).fill('');
+    await page.getByRole('button', { name: 'Salva prodotto', exact: true }).click();
+    await page.waitForURL('**/codici/magazzino');
+    assert.equal(calls.filter(call => call.path.endsWith('/save_catalogue_product')).at(-1).body.p_draft.purchasePrice, null);
+    assert.equal(await page.getByText('Prezzo d’acquisto (uso interno):', { exact: true }).count(), 0);
     assert.equal(save.body.p_expected_updated_at, '2026-10-11T10:00:00Z');
 
     await page.getByRole('button', { name: 'Gestisci categorie' }).click();
@@ -193,7 +219,10 @@ const errors = [];
       await page.getByPlaceholder('Punta qui la pistola barcode…').fill('05-0001');
       await page.getByRole('button', { name: 'Aggiungi', exact: true }).click();
       await page.getByLabel('Quantità 05-0001').waitFor();
-      await page.waitForFunction(() => !document.querySelector('input[placeholder="Punta qui la pistola barcode…"]').disabled);
+      await page.waitForFunction(expected => {
+        const quantity = document.querySelector('input[aria-label="Quantità 05-0001"]');
+        return quantity && !quantity.disabled && quantity.value === String(expected);
+      }, i + 1);
     }
     assert.equal(await page.getByLabel('Quantità 05-0001').inputValue(), '2');
     await page.getByLabel('Quantità 05-0001').fill('0');
@@ -244,7 +273,7 @@ const errors = [];
     await page.goto('http://127.0.0.1:3100/questa-pagina-non-esiste');
     await page.getByRole('heading', { name: 'Pagina non trovata' }).waitFor();
     // DDT: mixed goods/services, discounts, optional vehicle, editing, emission and PDF.
-    products=[{...makeProduct(),kind:'goods'},{...makeProduct(),id:'66666666-6666-4666-8666-666666666666',internal_code:'MAN001',kind:'service',name:'Manodopera',unit:'ore',product_prices:[{id:'service-price',amount:42.70,price_list:{name:'Prezzo vendita',sort_order:0}}]}];
+    products=[{...makeProduct(),kind:'goods',purchase_price:73.25},{...makeProduct(),purchase_price:12.34,id:'66666666-6666-4666-8666-666666666666',internal_code:'MAN001',kind:'service',name:'Manodopera',unit:'ore',product_prices:[{id:'service-price',amount:42.70,price_list:{name:'Prezzo vendita',sort_order:0}}]}];
     await page.goto('http://127.0.0.1:3100/codici/ddt/nuovo');
     await page.getByLabel('Azienda destinataria').selectOption(companyId);
     await page.getByLabel('Cerca nel catalogo').fill('05-0001');
@@ -262,6 +291,9 @@ const errors = [];
     await page.getByRole('button', {name:'Salva bozza',exact:true}).click();
     await page.getByRole('button', {name:'Modifica bozza',exact:true}).waitFor();
     assert.equal(deliveryDocument.total,'247.40');
+    assert.equal(deliveryDocument.lines[0].unit_price, '180');
+    assert(!JSON.stringify(calls.filter(call=>call.path.endsWith('/save_delivery_document')).at(-1).body).includes('purchase'));
+    assert.equal(await page.getByText('Prezzo d’acquisto', { exact: false }).count(), 0);
     await page.getByRole('button', {name:'Modifica bozza',exact:true}).click();
     await page.getByLabel('Note',{exact:true}).fill('Note aggiornate');
     await page.getByRole('button', {name:'Salva bozza',exact:true}).click();

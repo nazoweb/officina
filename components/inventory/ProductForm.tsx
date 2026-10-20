@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { getProduct, listCategories, saveProduct } from "@/lib/inventory/api";
 import { parseImportNumber } from "@/lib/inventory/import";
+import { decimalInput } from "@/lib/ddt/money";
 import { parseCrossReferences } from "@/lib/codici/normalizeCode";
 import type { Product, ProductDraft } from "@/types/inventory";
 
@@ -52,12 +53,14 @@ export function ProductForm({ product }: { product?: Product }) {
       });
       if (new Set(parsedPrices.map((price) => price.name.toLocaleLowerCase("it"))).size !== parsedPrices.length) throw new UserFacingError("Usa nomi diversi per i listini.");
       const text = (key: string) => String(data.get(key) ?? "").trim();
+      const purchasePrice = text("purchase_price") ? decimalInput(text("purchase_price"), 2, "Prezzo d’acquisto") : null;
+      if (purchasePrice !== null && Number(purchasePrice) > 9999999999.99) throw new UserFacingError("Il prezzo d’acquisto non può superare 9.999.999.999,99 €.");
       const draft: ProductDraft = {
         internal_code: code, kind, name: text("name"), supplierCode: text("supplier_code"), mav: text("mav"),
         crossReferences: parseCrossReferences(text("cross_references")), brand: text("brand"), category: text("category"),
         description: text("description"), location: text("location"), supplier: text("supplier"), unit: text("unit") || "pz",
         stockQuantity: Number(text("stock_quantity") || 0), minimumStock: text("minimum_stock") ? Number(text("minimum_stock")) : null,
-        notes: text("notes"), prices: parsedPrices,
+        notes: text("notes"), purchasePrice, prices: parsedPrices,
       };
       if (!Number.isInteger(draft.stockQuantity) || (draft.minimumStock !== null && (!Number.isInteger(draft.minimumStock) || draft.minimumStock! < 0))) throw new UserFacingError("Giacenza e scorta minima devono essere numeri interi.");
       await saveProduct(draft, product);
@@ -88,8 +91,12 @@ export function ProductForm({ product }: { product?: Product }) {
           <Field name="minimum_stock" label="Scorta minima" type="number" min="0" step="1" defaultValue={product?.minimum_stock ?? ""} />
         </div>
       </section>
+      <section className="rounded-xl border bg-card p-5 print:hidden">
+        <h2 className="mb-4 font-semibold">Prezzo d’acquisto</h2>
+        <Field name="purchase_price" label="Prezzo d’acquisto (€)" inputMode="decimal" defaultValue={product?.purchase_price == null ? "" : String(product.purchase_price).replace(".", ",")} hint="Dato interno riservato agli operatori. Non compare nei documenti destinati al cliente. Lascia vuoto per non indicarlo." />
+      </section>
       <section className="rounded-xl border bg-card p-5">
-        <h2 className="font-semibold">Prezzi e listini</h2>
+        <h2 className="font-semibold">Prezzi e listini di vendita</h2>
         <p className="mt-1 text-sm text-muted-foreground">Importi finali in euro. Lascia vuoto o rimuovi un prezzo per eliminarlo dal prodotto.</p>
         <div className="mt-4 space-y-3">{prices.map((price, index) => <div key={index} className="flex items-end gap-2">
           <Field label="Listino" value={price.name} onChange={(event) => setPrices(prices.map((value, i) => i === index ? { ...value, name: event.target.value } : value))} />
