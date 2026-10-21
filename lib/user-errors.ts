@@ -3,6 +3,24 @@ export class UserFacingError extends Error {
 }
 
 const businessMessages = new Set([
+  "Accedi per gestire le vendite.",
+  "Carrello non disponibile.",
+  "Dati vendita non validi.",
+  "Indica il motivo dell’annullamento, fino a 1000 caratteri.",
+  "La lista da riordinare è vuota.",
+  "La vendita è cambiata. Ricarica prima di continuare.",
+  "La vendita è già chiusa. Puoi soltanto annullarla.",
+  "Le quantità dei ricambi devono essere intere.",
+  "Operazione vendita non disponibile.",
+  "Prodotto non disponibile.",
+  "Puoi annullare soltanto una vendita chiusa.",
+  "Puoi creare il DDT soltanto per una vendita chiusa.",
+  "Puoi inserire al massimo 500 righe nella vendita.",
+  "Riga vendita non disponibile.",
+  "Scegli un’azienda disponibile prima di salvare.",
+  "Seleziona le voci da rimuovere.",
+  "Un ricambio è stato eliminato. Annulla senza ripristinare il magazzino e verifica le quantità.",
+
   "Controlla i dati del veicolo e riprova.",
   "Uno dei testi è troppo lungo. Riduci indirizzi, note o dati del veicolo.",
   'Aggiungi da 1 a 500 righe al documento.',

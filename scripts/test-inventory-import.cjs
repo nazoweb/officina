@@ -83,6 +83,7 @@ const originalLoad = Module._load;
 Module._load = function(name, parent, isMain) {
   if (name === '@/lib/supabase/client') return { createSupabaseBrowserClient: () => client };
   if (name === '@/lib/codici/normalizeCode') return require('../lib/codici/normalizeCode.ts');
+  if (name === '@/lib/inventory/search') return require('../lib/inventory/search.ts');
   if (name === '@/lib/user-errors') return require('../lib/user-errors.ts');
   if (name === '@/lib/inventory/activity') return { tracked: (_action, fn) => fn };
   return originalLoad.call(this, name, parent, isMain);
