@@ -61,7 +61,7 @@ function sum(s){s.total=s.lines.reduce((sum,l)=>{l.line_total=(Number(l.quantity
    const session={access_token:token,refresh_token:'fake',token_type:'bearer',expires_at:4102444800,expires_in:3600,user:{id:userId,aud:'authenticated',email:'test@example.invalid',app_metadata:{},user_metadata:{}}};
    document.cookie=`sb-vfiiyuwvpocmmlhvmrlo-auth-token=base64-${encode(session)}; path=/; SameSite=Lax`;
   },{userId});
-  const scan=async code=>{await page.getByPlaceholder('Codice o barcode della vendita…').fill(code);await page.getByPlaceholder('Codice o barcode della vendita…').press('Enter');};
+  const scan=async code=>{await page.getByPlaceholder('Codice o barcode…').fill(code);await page.getByPlaceholder('Codice o barcode…').press('Enter');};
   const waitQuantity=async(code,quantity)=>page.waitForFunction(({code,quantity})=>document.querySelector(`input[aria-label="Quantità vendita ${code}"]`)?.value===quantity,{code,quantity});
   await page.goto('http://127.0.0.1:3100/codici/vendite');await page.getByText('Il carrello è vuoto.',{exact:false}).waitFor();
   await scan('SHARED');await page.getByRole('button',{name:'MOTOR-001 · Motorino di avviamento',exact:true}).waitFor();
@@ -76,7 +76,7 @@ function sum(s){s.total=s.lines.reduce((sum,l)=>{l.line_total=(Number(l.quantity
   await page.getByRole('button',{name:'Salva riga',exact:true}).click();await page.getByText('486,00 €',{exact:true}).last().waitFor();
   await scan('BATT-001');await waitQuantity('BATT-001','1');await page.getByRole('button',{name:'Rimuovi BATT-001 dalla vendita',exact:true}).click();
   await page.getByLabel('Quantità vendita BATT-001',{exact:true}).waitFor({state:'hidden'});
-  await page.getByLabel('Nome cliente (facoltativo)').fill('Antonio');await page.getByLabel('Pagamento',{exact:true}).selectOption('Carta');
+  await page.getByRole('button',{name:/Cliente e pagamento/}).click();await page.getByLabel('Nome cliente (facoltativo)').fill('Antonio');await page.getByLabel('Pagamento',{exact:true}).selectOption('Carta');
   await page.getByRole('button',{name:'Chiudi vendita',exact:true}).waitFor({state:'visible'});await page.waitForFunction(()=>!Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='Chiudi vendita')?.disabled);await page.evaluate(()=>{document.activeElement?.blur();window.scrollTo(0,0);});await page.screenshot({path:'/tmp/officina-sales-cart.png',fullPage:true});
   await page.getByRole('button',{name:'Chiudi vendita',exact:true}).click();await page.getByRole('button',{name:'Conferma vendita',exact:true}).click();
   await page.getByRole('heading',{name:'Vendita 1/2026',exact:true}).waitFor();const firstId=sales[0].id;
@@ -85,27 +85,37 @@ function sum(s){s.total=s.lines.reduce((sum,l)=>{l.line_total=(Number(l.quantity
   let download=page.waitForEvent('download');await page.getByRole('button',{name:'Scarica PDF',exact:true}).click();await (await download).saveAs('/tmp/officina-sales-receipt.pdf');
   await page.screenshot({path:'/tmp/officina-sales-receipt.png',fullPage:true});
   await page.getByRole('link',{name:'Nuova vendita',exact:true}).click();await page.getByText('Il carrello è vuoto.',{exact:false}).waitFor();
-  await page.getByLabel('Azienda per il DDT',{exact:true}).selectOption(companyId);await scan('BATT-001');await waitQuantity('BATT-001','1');
+  await page.getByRole('button',{name:/Cliente e pagamento/}).click();await page.getByLabel('Azienda per il DDT',{exact:true}).selectOption(companyId);await scan('BATT-001');await waitQuantity('BATT-001','1');
   failDdt=true;await page.getByRole('button',{name:'Chiudi ed emetti DDT',exact:true}).click();await page.getByRole('button',{name:'Conferma vendita e DDT',exact:true}).click();
   await page.getByText('Completa i dati dell’officina e la verifica amministrativa',{exact:false}).waitFor();assert.equal(products[1].stock_quantity,10);assert.equal(reorder.length,1);
   await page.getByRole('button',{name:'Conferma vendita e DDT',exact:true}).click();await page.getByRole('heading',{name:'Vendita 2/2026',exact:true}).waitFor();
-  await page.getByRole('link',{name:'Apri DDT / documento collegato',exact:true}).waitFor();assert.equal(products[1].stock_quantity,9);
-  await page.getByRole('link',{name:'Apri lista da riordinare',exact:true}).click();await page.getByLabel('Seleziona tutte le voci visibili').waitFor();
-  await page.getByLabel('Filtra lista da riordinare').fill('Motorino');await page.getByRole('button',{name:'Stampa lista e salva nello storico',exact:true}).click();
-  await page.getByRole('heading',{name:'Stampa 1 · Da riordinare',exact:true}).waitFor();assert.equal(prints[0].lines.length,2);assert.equal(reorder.filter(l=>!l.removed_at).length,2);
+  await page.getByRole('link',{name:'Apri DDT',exact:true}).waitFor();assert.equal(products[1].stock_quantity,9);
+  await page.getByRole('link',{name:'Da riordinare',exact:true}).last().click();await page.getByLabel('Seleziona tutte le voci visibili').waitFor();
+  await page.getByLabel('Filtra lista da riordinare').fill('Motorino');await page.getByRole('button',{name:'Stampa lista',exact:true}).click();
+  await page.getByRole('heading',{name:'Stampa 1',exact:true}).waitFor();assert.equal(prints[0].lines.length,2);assert.equal(reorder.filter(l=>!l.removed_at).length,2);
   download=page.waitForEvent('download');await page.getByRole('button',{name:'Scarica PDF',exact:true}).click();await (await download).saveAs('/tmp/officina-reorder-print.pdf');
   const printId=prints[0].id;
-  await page.getByRole('link',{name:'Torna alla lista corrente e allo storico',exact:true}).click();await page.getByLabel('Seleziona tutte le voci visibili').waitFor();
-  await page.getByLabel('Seleziona MOTOR-001 vendita 1/2026',{exact:true}).check();await page.getByRole('button',{name:'Elimina dalla lista (1)',exact:true}).click();await page.getByRole('button',{name:'Conferma rimozione dalla lista',exact:true}).click();
-  await page.getByLabel('Seleziona MOTOR-001 vendita 1/2026',{exact:true}).waitFor({state:'hidden'});assert.equal(reorder.filter(l=>!l.removed_at).length,1);assert.equal(prints[0].lines.length,2);assert.equal(products[0].stock_quantity,7);
+  await page.getByRole('link',{name:'Torna alla lista',exact:true}).click();await page.getByLabel('Seleziona tutte le voci visibili').waitFor();
+  await page.getByRole('checkbox',{name:'Seleziona MOTOR-001 vendita 1/2026',exact:true}).check();await page.getByRole('button',{name:'Elimina dalla lista (1)',exact:true}).click();await page.getByRole('button',{name:'Conferma rimozione dalla lista',exact:true}).click();
+  await page.getByRole('checkbox',{name:'Seleziona MOTOR-001 vendita 1/2026',exact:true}).waitFor({state:'hidden'});assert.equal(reorder.filter(l=>!l.removed_at).length,1);assert.equal(prints[0].lines.length,2);assert.equal(products[0].stock_quantity,7);
   await page.getByRole('dialog').waitFor({state:'hidden'});await page.screenshot({path:'/tmp/officina-reorder-list.png',fullPage:true});
-  await page.goto(`http://127.0.0.1:3100/codici/riordino/stampe/${printId}`);await page.getByText('Motorino di avviamento',{exact:true}).waitFor();assert.equal(prints.length,1);
+  await page.goto(`http://127.0.0.1:3100/codici/riordino/stampe/${printId}`);await page.getByText('Motorino di avviamento',{exact:true}).filter({visible:true}).waitFor();assert.equal(prints.length,1);
   await page.goto(`http://127.0.0.1:3100/codici/vendite/${firstId}`);await page.getByRole('button',{name:'Annulla vendita',exact:true}).click();await page.getByLabel('Motivo dell’annullamento').fill('Reso del cliente');await page.getByRole('button',{name:'Conferma annullamento vendita',exact:true}).click();
   await page.getByText('Vendita annullata',{exact:true}).waitFor();assert.equal(products[0].stock_quantity,10);assert.equal(reorder.filter(l=>!l.removed_at).length,1);assert.equal(prints[0].lines.length,2);
-  await page.getByRole('link',{name:'Storico vendite',exact:true}).last().click();await page.getByRole('button',{name:'Cerca vendite',exact:true}).waitFor();
-  await page.getByLabel('Numero, cliente o prodotto').fill('Antonio');await page.getByRole('button',{name:'Cerca vendite',exact:true}).click();await page.getByRole('link',{name:/Vendita 1\/2026/}).waitFor();
+  await page.getByRole('link',{name:'Storico vendite',exact:true}).last().click();await page.getByRole('button',{name:'Cerca',exact:true}).waitFor();
+  await page.getByLabel('Cerca vendita').fill('Antonio');await page.getByRole('button',{name:'Cerca',exact:true}).click();await page.getByRole('link',{name:/Vendita 1\/2026/}).waitFor();
   await page.setViewportSize({width:390,height:844});await page.goto('http://127.0.0.1:3100/codici/vendite');await page.getByText('Il carrello è vuoto.',{exact:false}).waitFor();
   await scan('MOTOR-001');await waitQuantity('MOTOR-001','1');await page.screenshot({path:'/tmp/officina-sales-mobile.png',fullPage:true});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Mobile cart overflow');
+  for(const width of [320,768,1440]){
+    await page.setViewportSize({width,height:900});
+    for(const route of ['/codici/riordino','/codici/vendite/storico',`/codici/vendite/${firstId}`,`/codici/riordino/stampe/${printId}`]){
+      await page.goto(`http://127.0.0.1:3100${route}`);
+      await page.getByRole('heading',{level:1}).waitFor();
+      if(route==='/codici/riordino')await page.getByRole('checkbox',{name:'Seleziona tutte le voci visibili'}).waitFor();
+      if(route.includes('/stampe/'))await page.getByRole('button',{name:'Scarica PDF',exact:true}).waitFor();
+      assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),`Overflow at ${width}: ${route}`);
+    }
+  }
   assert.deepEqual(errors,[]);
   console.log('OK: scans, quantity/discount edits, removal, receipt history, PDF, next empty cart, atomic DDT error/retry, persistent reorder, immutable print and manual removal, cancellation, history search, mobile. No live records changed.');
  }catch(error){
