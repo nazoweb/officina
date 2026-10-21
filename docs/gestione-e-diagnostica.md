@@ -4,6 +4,8 @@ Dal Magazzino si possono creare, modificare ed eliminare prodotti, gestire categ
 
 Il barcode coincide sempre con il nostro codice. La scheda prodotto permette di modificare tutti i dati, rimuovere codici e prezzi, aggiungere listini e correggere la giacenza. Un aggiornamento concorrente della scheda richiede di riaprirla prima di salvare.
 
+Ricerca prodotto e Magazzino usano gli stessi criteri: codice completo o parziale, nome, marca, categoria e codici associati. Il codice interno viene cercato anche quando manca il corrispondente identificativo separato. Nelle liste ordini la scansione continua a richiedere un codice esatto per evitare di scaricare un prodotto individuato soltanto per somiglianza.
+
 ## Excel
 
 L’importazione salva ogni prodotto in una transazione unica. Lo stesso codice identifica sempre lo stesso prodotto: reimportare il file non duplica i prodotti né la giacenza iniziale. Le colonne non abbinate e i prezzi vuoti mantengono i dati esistenti; per eliminarli utilizzare la scheda prodotto. I codici ripetuti nel file, le colonne abbinate a più campi e i numeri non validi bloccano l’importazione prima delle scritture. Le righe senza codice vengono segnalate e ignorate.
@@ -23,6 +25,7 @@ Per assistenza: cercare il riferimento e usare sessione/utente per ricostruire g
 ## Verifiche
 
 - `node scripts/test-inventory-import.cjs`: file Excel, numeri italiani, prezzi zero, colonne e codici duplicati, quantità errate e traduzione degli errori.
+- `node scripts/test-product-search.cjs`: ricerca completa e parziale, codici interni senza identificativi e campi condivisi con Magazzino.
 - `scripts/test-inventory-management.sql`: CRUD, categorie, giacenze, snapshot storici, blocco delle liste chiuse e salvataggio atomico. Usa dati sintetici dentro una transazione annullata.
 - `scripts/test-inventory-edge.sql`: stesso file/codice, dati assenti, prezzi zero, errori a metà salvataggio, accesso al registro e dettagli tecnici protetti. Transazione annullata.
 - `scripts/test-inventory-ui.cjs`: sito locale su porta 3100, Chrome e Playwright (`OFFICINA_PLAYWRIGHT` può indicare il modulo disponibile). Tutte le richieste Supabase sono simulate. Copre CRUD, scanner, importazioni ripetute, errori comprensibili, ripristino del registro, accesso e layout desktop/mobile.

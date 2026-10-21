@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { adjustStock, listCategories, listProducts, assignProductsCategory } from "@/lib/inventory/api";
+import { matchesProductQuery } from "@/lib/inventory/search";
 import type { Product } from "@/types/inventory";
 import { EmptyProductState, ProductCard } from "./ProductCard";
 import { CategoriesManager } from "./CategoriesManager";
@@ -40,7 +41,7 @@ export function Warehouse() {
   const visible = useMemo(() => {
     const q = query.trim().toUpperCase();
     return products.filter((product) => {
-      const matchesText = !q || [product.internal_code, product.name, product.brand, product.category, ...product.product_identifiers.map((item) => item.value)].join(" ").toUpperCase().includes(q);
+      const matchesText = matchesProductQuery(product, q);
       const matchesStock = filter === "all" || (filter === "negative" ? product.stock_quantity < 0 : product.minimum_stock !== null && product.stock_quantity <= product.minimum_stock);
       const matchesCategory = category === "all" || (category === "none" ? !product.category : product.category === category.slice(9));
       return matchesText && matchesStock && matchesCategory;

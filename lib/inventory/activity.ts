@@ -4,7 +4,7 @@ import { UserFacingError, userErrorMessage } from "@/lib/user-errors";
 
 export const activityLabels: Record<string, string> = {
   listClients: "Lettura aziende", saveClient: "Salvataggio azienda", deleteClient: "Eliminazione azienda", getDeliverySettings: "Lettura impostazioni documenti", saveDeliverySettings: "Salvataggio impostazioni documenti", listDocuments: "Lettura documenti", getDocument: "Apertura documento", saveDocument: "Salvataggio bozza documento", issueDocument: "Emissione documento", cancelDocument: "Annullamento documento", deleteDraft: "Eliminazione bozza", documentPdf: "Generazione PDF documento",
-  listProducts: "Apertura magazzino", findProductsByCode: "Ricerca o scansione codice", getProduct: "Apertura prodotto", saveProduct: "Salvataggio prodotto", createProduct: "Creazione prodotto", deleteProduct: "Eliminazione prodotto",
+  listProducts: "Apertura magazzino", findProductsByCode: "Ricerca o scansione codice", searchProducts: "Ricerca prodotto", getProduct: "Apertura prodotto", saveProduct: "Salvataggio prodotto", createProduct: "Creazione prodotto", deleteProduct: "Eliminazione prodotto",
   listCategories: "Lettura categorie", createCategory: "Creazione categoria", renameCategory: "Rinomina categoria", deleteCategory: "Eliminazione categoria", assignProductsCategory: "Assegnazione categoria",
   updateOrder: "Modifica lista", deleteOrder: "Eliminazione lista", upsertImportedProduct: "Importazione prodotto da Excel", createOrder: "Creazione lista", listOrders: "Apertura liste ordini", getOrder: "Apertura lista", scanProductIntoOrder: "Aggiunta prodotto alla lista", setOrderItemQuantity: "Modifica quantità nella lista", closeOrder: "Chiusura lista", adjustStock: "Rettifica giacenza", navigation: "Apertura pagina", unexpected: "Problema imprevisto", importFile: "Lettura file Excel", importCompleted: "Importazione Excel completata",
 };
@@ -46,7 +46,7 @@ export async function recordActivity(action: string, status: "success" | "error"
 function context(action: string, args: unknown[]) {
   const first = args[0] as Record<string, unknown> | string | undefined;
   if (action === "saveProduct" || action === "createProduct" || action === "upsertImportedProduct") { const draft = first as Record<string, unknown>; return { code: draft?.internal_code, category: draft?.category, productId: (args[1] as { id?: string })?.id }; }
-  if (action === "findProductsByCode") return { code: first };
+  if (action === "findProductsByCode" || action === "searchProducts") return { code: first };
   if (["createCategory", "renameCategory", "deleteCategory"].includes(action)) return { category: first, newCategory: action === "renameCategory" ? args[1] : undefined, deleteProducts: action === "deleteCategory" ? args[1] : undefined, count: args[2] };
   if (action === "assignProductsCategory") return { productIds: (args[0] as string[]).slice(0, 20), count: (args[0] as string[]).length, category: args[1] };
   if (action === "createOrder") return {};

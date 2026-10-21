@@ -2,6 +2,7 @@
 
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { normalizeCode } from "@/lib/codici/normalizeCode";
+import { matchesProductQuery } from "@/lib/inventory/search";
 import type { OrderDetail, OrderSummary, Product, ProductDraft } from "@/types/inventory";
 
 import { UserFacingError } from "@/lib/user-errors";
@@ -38,6 +39,12 @@ async function findProductsByCodeImpl(rawCode: string): Promise<Product[]> {
   const { data, error } = await supabase.from("products").select(PRODUCT_SELECT).in("id", productIds).eq("active", true);
   throwIfError(error);
   return (data ?? []) as Product[];
+}
+
+async function searchProductsImpl(query: string): Promise<Product[]> {
+  if (!query.trim()) return [];
+  // Read the paginated catalogue just as the warehouse does, including products without identifiers.
+  return (await listProductsImpl()).filter((product) => matchesProductQuery(product, query));
 }
 
 async function getProductImpl(id: string): Promise<Product> {
@@ -164,6 +171,7 @@ async function adjustStockImpl(productId: string, delta: number, note = "") {
 
 export const listProducts = tracked("listProducts", listProductsImpl);
 export const findProductsByCode = tracked("findProductsByCode", findProductsByCodeImpl);
+export const searchProducts = tracked("searchProducts", searchProductsImpl);
 export const getProduct = tracked("getProduct", getProductImpl);
 export const saveProduct = tracked("saveProduct", saveProductImpl);
 export const createProduct = tracked("createProduct", createProductImpl);

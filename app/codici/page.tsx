@@ -5,6 +5,6 @@ import { PageFrame } from "@/components/codici/PageFrame";
 export default function CodiciPage() {
   return <>
     <header className="flex h-14 shrink-0 items-center gap-2 border-b px-4"><SidebarTrigger className="-ml-1" /><span className="text-sm font-medium">Ricerca prodotto</span></header>
-    <PageFrame title="Trova un prodotto" description="Cerca con barcode, codice interno, MAV o codice equivalente."><ProductSearch /></PageFrame>
+    <PageFrame title="Trova un prodotto" description="Cerca con codice completo o parziale, barcode, MAV, codice equivalente o nome prodotto."><ProductSearch /></PageFrame>
   </>;
 }

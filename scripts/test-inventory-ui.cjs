@@ -173,7 +173,7 @@ const errors = [];
     await page.getByPlaceholder('Punta la pistola qui o digita un codice…').fill('NOTFOUND');
     await page.getByRole('button', { name: 'Cerca', exact: true }).click();
     await page.getByText('Nessun prodotto trovato', { exact: false }).waitFor();
-    fault = { path: '/product_identifiers', code: '42702', message: 'column reference "id" is ambiguous' };
+    fault = { path: '/products', code: '42702', message: 'column reference "id" is ambiguous' };
     await page.getByPlaceholder('Punta la pistola qui o digita un codice…').fill('05-0001');
     await page.getByRole('button', { name: 'Cerca', exact: true }).click();
     await page.getByText('Riferimento per l’assistenza:', { exact: false }).waitFor();
@@ -250,6 +250,29 @@ const errors = [];
     await page.getByRole('button', { name: 'Elimina Categoria vuota', exact: true }).waitFor({ state: 'hidden' });
     assert.equal(products.length, 1);
     await page.getByRole('button', { name: 'Chiudi', exact: true }).click();
+    // Keyboard search uses the same fields as warehouse, even without a code identifier.
+    const previousProducts = products;
+    products = [
+      { ...makeProduct(), product_identifiers: [] },
+      { ...makeProduct(), id: '77777777-7777-4777-8777-777777777777', internal_code: '05-0002', name: 'Secondo devio',
+        product_identifiers: [{ id: 'supplier-test', kind: 'supplier_code', value: 'FOR-987' }] },
+    ];
+    await page.goto('http://127.0.0.1:3100/codici');
+    const keyboardSearch = page.getByPlaceholder('Punta la pistola qui o digita un codice…');
+    for (const query of [' 05-0001 ', '05-00', 'devio', 'for-98']) {
+      await keyboardSearch.fill(query);
+      await keyboardSearch.press('Enter');
+      await page.getByRole('button', { name: 'Cerca', exact: true }).waitFor();
+      await page.waitForFunction(() => !document.querySelector('form input').disabled);
+      assert.equal(await page.locator('article').count(), ['05-00', 'devio'].includes(query) ? 2 : 1);
+      if (query.trim() === '05-0001') await page.getByRole('heading', { name: 'Devio guida', exact: true }).waitFor();
+      if (query === 'for-98') await page.getByRole('heading', { name: 'Secondo devio', exact: true }).waitFor();
+    }
+    await page.goto('http://127.0.0.1:3100/codici/magazzino');
+    await page.getByRole('link', { name: 'Modifica', exact: true }).first().waitFor();
+    await page.getByPlaceholder('Cerca nome, codice o categoria…').fill('05-00');
+    assert.equal(await page.locator('article').count(), 2);
+    products = previousProducts;
     // A failed diagnostic request cannot break the user's search; it is retried later.
     await page.goto('http://127.0.0.1:3100/codici');
     await page.getByPlaceholder('Punta la pistola qui o digita un codice…').fill('NOTFOUND');
