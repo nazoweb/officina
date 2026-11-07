@@ -5,7 +5,7 @@ import { userErrorMessage, UserFacingError } from "@/lib/user-errors";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Plus, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -13,6 +13,8 @@ import { getProduct, listCategories, saveProduct } from "@/lib/inventory/api";
 import { parseImportNumber } from "@/lib/inventory/import";
 import { decimalInput } from "@/lib/ddt/money";
 import { parseCrossReferences } from "@/lib/codici/normalizeCode";
+import { FormActions } from "@/components/codici/FormActions";
+import { returnLabel, useReturnTo, useUnsavedChanges } from "@/hooks/use-workspace-navigation";
 import type { Product, ProductDraft } from "@/types/inventory";
 
 export function ProductEditor({ productId }: { productId: string }) {
@@ -27,6 +29,9 @@ export function ProductEditor({ productId }: { productId: string }) {
 export function ProductForm({ product }: { product?: Product }) {
   const router = useRouter();
   const submitting = useRef(false);
+  const returnTo = useReturnTo();
+  const [dirty, setDirty] = useState(false);
+  const markSaved = useUnsavedChanges(dirty);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [categories, setCategories] = useState<string[]>([]);
@@ -64,12 +69,17 @@ export function ProductForm({ product }: { product?: Product }) {
       };
       if (!Number.isInteger(draft.stockQuantity) || (draft.minimumStock !== null && (!Number.isInteger(draft.minimumStock) || draft.minimumStock! < 0))) throw new UserFacingError("Giacenza e scorta minima devono essere numeri interi.");
       await saveProduct(draft, product);
-      router.push("/codici/magazzino"); router.refresh();
+      markSaved(); setDirty(false);
+      router.push(returnTo); router.refresh();
     } catch (cause) { setError(userErrorMessage(cause, "Impossibile salvare il prodotto.")); }
     finally { submitting.current = false; setSaving(false); }
   };
 
-  return <form onSubmit={submit} className="space-y-5">
+  return <form onSubmit={submit} onChange={() => setDirty(true)} className="space-y-5">
+    <FormActions error={error} status={saving ? "Salvataggio…" : dirty ? "Modifiche da salvare" : undefined}>
+      <Button variant="outline" asChild disabled={saving}><Link href={returnTo}><ArrowLeft className="h-4 w-4" />{returnLabel(returnTo)}</Link></Button>
+      <Button disabled={saving}>{saving ? "Salvataggio…" : product ? "Salva modifiche" : "Salva prodotto"}</Button>
+    </FormActions>
     <fieldset disabled={saving} className="space-y-5">
       <section className="rounded-xl border bg-card p-5">
         <h2 className="mb-4 font-semibold">Dati prodotto</h2>
@@ -101,17 +111,17 @@ export function ProductForm({ product }: { product?: Product }) {
         <div className="mt-4 space-y-3">{prices.map((price, index) => <div key={index} className="flex items-end gap-2">
           <Field label="Listino" value={price.name} onChange={(event) => setPrices(prices.map((value, i) => i === index ? { ...value, name: event.target.value } : value))} />
           <Field label="Prezzo (€)" inputMode="decimal" value={price.amount} onChange={(event) => setPrices(prices.map((value, i) => i === index ? { ...value, amount: event.target.value } : value))} />
-          <Button type="button" variant="outline" size="icon" className="shrink-0" aria-label={`Rimuovi ${price.name || "prezzo"}`} onClick={() => setPrices(prices.filter((_, i) => i !== index))}><Trash2 className="h-4 w-4" /></Button>
+          <Button type="button" variant="outline" size="icon" className="shrink-0" aria-label={`Rimuovi ${price.name || "prezzo"}`} onClick={() => { setDirty(true); setPrices(prices.filter((_, i) => i !== index)); }}><Trash2 className="h-4 w-4" /></Button>
         </div>)}</div>
-        <Button type="button" variant="outline" className="mt-4" onClick={() => setPrices([...prices, { name: "", amount: "" }])}><Plus className="mr-2 h-4 w-4" />Aggiungi prezzo</Button>
+        <Button type="button" variant="outline" className="mt-4" onClick={() => { setDirty(true); setPrices([...prices, { name: "", amount: "" }]); }}><Plus className="mr-2 h-4 w-4" />Aggiungi prezzo</Button>
       </section>
       <section className="space-y-4 rounded-xl border bg-card p-5">
         <label className="block text-sm font-medium">Descrizione<Textarea name="description" defaultValue={product?.description} className="mt-1.5" /></label>
         <label className="block text-sm font-medium">Note<Textarea name="notes" defaultValue={product?.notes} className="mt-1.5" /></label>
       </section>
     </fieldset>
-    {error && <p role="alert" className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
-    <div className="flex gap-3"><Button disabled={saving}>{saving ? "Salvataggio…" : "Salva prodotto"}</Button><Button variant="outline" asChild disabled={saving}><Link href="/codici/magazzino">Annulla</Link></Button></div>
+
+
   </form>;
 }
 

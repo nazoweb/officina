@@ -2,19 +2,25 @@
 
 import { userErrorMessage } from "@/lib/user-errors";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ScanBarcode, Search } from "lucide-react";
 import { searchProducts } from "@/lib/inventory/api";
 import type { Product } from "@/types/inventory";
+import Link from "next/link";
+import { addSaleProduct, openSale } from "@/lib/sales/api";
+import { useWorkspaceState } from "@/hooks/use-workspace-navigation";
 import { EmptyProductState, ProductCard } from "./ProductCard";
 
 export function ProductSearch() {
   const pending = useRef(false);
   const input = useRef<HTMLInputElement>(null);
-  const [value, setValue] = useState("");
+  const [value, setValue, restored] = useWorkspaceState("product-search", "");
+  const [adding, setAdding] = useState(false);
+  const addOperations = useRef<Record<string, string>>({});
+  const [added, setAdded] = useState("");
   const [products, setProducts] = useState<Product[] | null>(null);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
@@ -26,10 +32,18 @@ export function ProductSearch() {
     catch (cause) { setMessage(userErrorMessage(cause, "Errore di ricerca.")); }
     finally { pending.current = false; setLoading(false); setTimeout(() => input.current?.focus(), 0); }
   };
+  useEffect(() => { if (restored && value.trim()) void search(); }, [restored]);
+  const addToSale = async (product: Product) => {
+    if (pending.current || adding) return; pending.current = true; setAdding(true); setMessage("");
+    try { const sale = await openSale(); const operation = addOperations.current[product.id] ?? crypto.randomUUID(); addOperations.current[product.id] = operation; await addSaleProduct(sale.id, product.id, operation); delete addOperations.current[product.id]; setAdded(product.name || product.internal_code); }
+    catch (cause) { setMessage(userErrorMessage(cause)); }
+    finally { pending.current = false; setAdding(false); }
+  };
   return <div className="space-y-6"><form onSubmit={search} className="rounded-xl border bg-card p-4 sm:p-5"><div className="mb-3 flex items-center gap-2 text-sm font-medium"><ScanBarcode className="h-4 w-4 text-primary" />Scansiona o inserisci un codice</div><div className="flex gap-2"><Input ref={input} value={value} onChange={(e) => setValue(e.target.value)} placeholder="Punta la pistola qui o digita un codice…" className="h-12 font-mono text-base" autoFocus disabled={loading} /><Button type="submit" className="h-12 px-5" disabled={loading || !value.trim()}><Search className="mr-2 h-4 w-4" />Cerca</Button></div><p className="mt-2 text-xs text-muted-foreground">Puoi cercare anche una parte del codice, il nome, la marca o la categoria. Il lettore USB/Bluetooth avvia la ricerca inviando il codice e Invio.</p></form>
+    {added && <p role="status" className="text-sm">{added} aggiunto alla vendita. <Link className="font-medium underline" href="/codici/vendite">Apri carrello</Link></p>}
     {message && <Alert variant="destructive"><AlertDescription>{message}</AlertDescription></Alert>}
     {products?.length === 0 && <EmptyProductState />}
     {products && products.length > 1 && <Alert><AlertDescription>Più prodotti corrispondono alla ricerca. Controlla il codice completo per scegliere quello corretto.</AlertDescription></Alert>}
-    <div className="grid gap-4">{products?.map((product) => <ProductCard product={product} key={product.id} />)}</div>
+    <div className="grid gap-4">{products?.map((product) => <ProductCard key={product.id} product={product} onAdd={() => addToSale(product)} addLabel="Aggiungi alla vendita" adding={adding} />)}</div>
   </div>;
 }

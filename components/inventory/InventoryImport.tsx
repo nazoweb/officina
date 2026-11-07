@@ -82,11 +82,11 @@ export function InventoryImport() {
       <label className="mt-4 block text-sm font-medium">Categoria per questo file (facoltativa)<Input className="mt-1.5" value={category} onChange={(event) => setCategory(event.target.value)} disabled={loading} placeholder="Es. Devio guida" /></label><p className="mt-1 text-xs text-muted-foreground">Assegna questa categoria a tutti i prodotti del file, se non è abbinata una colonna Categoria.</p>
       <p className="mt-2 text-xs text-muted-foreground">Colonne supportate: CODICE FORNITORE, NOSTRO CODICE, CROSS REFERENCE, PREZZO VENDITA, SCONTO AZIENDE, SCONTO OFFICINE, QUANTITÀ. Viene letto il primo foglio. Il barcode viene generato dal nostro codice; la colonna CODICE A BARRE dell’Excel viene ignorata.</p>
     </section>
-    <section className="rounded-xl border border-dashed bg-muted/20 p-5">
-      <h2 className="font-semibold">Migra archivio precedente</h2>
+    <details className="rounded-xl border border-dashed bg-muted/20 p-5">
+      <summary className="cursor-pointer font-semibold">Strumenti avanzati · Migra archivio precedente</summary>
       <p className="mt-1 text-sm text-muted-foreground">Trasferisce i codici già salvati in questo browser senza cancellare le informazioni dei prodotti già presenti.</p>
       <Button variant="outline" className="mt-3" onClick={migrateLocalCodes} disabled={loading}>Migra codici locali</Button>
-    </section>
+    </details>
     {headers.length > 0 && <>
       <section className="rounded-xl border bg-card p-5">
         <h2 className="font-semibold">Mappa colonne</h2>
