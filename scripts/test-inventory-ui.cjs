@@ -216,7 +216,8 @@ const errors = [];
     products = [makeProduct()]; categories = ['Devio guida']; order = { ...order, status: 'open', order_items: [] };
     await page.goto(`http://127.0.0.1:3100/codici/ordini/${orderId}`);
     for (let i=0;i<2;i++) {
-      await page.getByPlaceholder('Punta qui la pistola barcode…').fill('05-0001');
+      await page.getByPlaceholder('Punta qui la pistola barcode…').fill(i === 0 ? "05'0001" : '05-0001');
+      assert.equal(await page.getByPlaceholder('Punta qui la pistola barcode…').inputValue(), '05-0001', 'The input is corrected before submission');
       await page.getByRole('button', { name: 'Aggiungi', exact: true }).click();
       await page.getByLabel('Quantità 05-0001').waitFor();
       await page.waitForFunction(expected => {

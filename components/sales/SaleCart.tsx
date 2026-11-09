@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { ConfirmAction } from '@/components/inventory/ConfirmAction';
 import { listClients } from '@/lib/ddt/api';
 import { findProductsByCode, searchProducts } from '@/lib/inventory/api';
+import { normalizeScannerInput } from '@/lib/inventory/scanner';
 import { addSaleProduct, closeSale, discardSale, editSale, getSale, openSale, updateSaleLine } from '@/lib/sales/api';
 import { useUnsavedChanges } from '@/hooks/use-workspace-navigation';
 import { NewClientDialog } from '@/components/ddt/NewClientDialog';
@@ -131,8 +132,8 @@ export function SaleCart(){
     {notice&&<p role="status" className="text-sm text-emerald-700 dark:text-emerald-400">{notice}</p>}
     <div className="space-y-3"><h2 className="text-lg font-semibold">Articoli ({sale.lines.length})</h2>
     <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_20rem]"><div className="min-w-0 space-y-5">
-        <form className="rounded-xl border bg-card p-4" onSubmit={e=>{e.preventDefault();if(code.trim())enqueue({code:code.trim()});}}>
-      <label htmlFor="sale-code" className="block text-sm font-medium">Aggiungi un articolo</label><div className="mt-2 flex gap-2"><Input id="sale-code" ref={scanner} value={code} onChange={e=>setCode(e.target.value)} placeholder="Codice o barcode…" className="h-12 font-mono" autoFocus disabled={Boolean(action)}/><Button className="h-12" disabled={!code.trim()||Boolean(action)}>Aggiungi</Button></div>
+        <form className="rounded-xl border bg-card p-4" onSubmit={e=>{e.preventDefault();const scanned=normalizeScannerInput(code).trim();if(scanned)enqueue({code:scanned});}}>
+      <label htmlFor="sale-code" className="block text-sm font-medium">Aggiungi un articolo</label><div className="mt-2 flex gap-2"><Input id="sale-code" ref={scanner} value={code} onChange={e=>setCode(normalizeScannerInput(e.target.value))} placeholder="Codice o barcode…" className="h-12 font-mono" autoFocus disabled={Boolean(action)}/><Button className="h-12" disabled={!code.trim()||Boolean(action)}>Aggiungi</Button></div>
       <p className="mt-2 text-xs text-muted-foreground">Ogni scansione aggiunge un pezzo e salva il carrello.</p>
     </form>
     {matches.length>0&&<section className="space-y-2 rounded-xl border p-4"><h2 className="font-semibold">Scegli il prodotto</h2><p className="text-xs text-muted-foreground">Le scansioni successive sono conservate in attesa della scelta.</p><Button variant="outline" disabled={busy} onClick={()=>{setMatches([]);awaitingChoice.current=false;void processQueue();}}>Ignora questo codice</Button>{matches.map(p=><Button key={p.id} variant="outline" className="h-auto w-full justify-start whitespace-normal py-3 text-left" disabled={busy} onClick={()=>enqueue({productId:p.id})}>{p.internal_code} · {p.name||p.description}</Button>)}</section>}

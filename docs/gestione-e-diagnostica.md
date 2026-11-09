@@ -4,6 +4,8 @@ Dal Magazzino si possono creare, modificare ed eliminare prodotti, gestire categ
 
 Il barcode coincide sempre con il nostro codice. La scheda prodotto permette di modificare tutti i dati, rimuovere codici e prezzi, aggiungere listini e correggere la giacenza. Un aggiornamento concorrente della scheda richiede di riaprirla prima di salvare.
 
+Nei campi di scansione di Ricerca prodotto, Carrello vendita e liste ordini, ogni apostrofo dritto o tipografico viene sostituito immediatamente con un trattino, durante la digitazione, la scansione o l'incolla: `03'` diventa già `03-`, prima di premere Invio. Gli zeri iniziali vengono conservati. Se il lettore invia apostrofi al posto dei trattini, verificare anche che la lingua della tastiera configurata sul lettore coincida con quella del computer, usando il manuale del modello.
+
 Ricerca prodotto e Magazzino usano gli stessi criteri: codice completo o parziale, nome, marca, categoria e codici associati. Il codice interno viene cercato anche quando manca il corrispondente identificativo separato. Nelle liste ordini la scansione continua a richiedere un codice esatto per evitare di scaricare un prodotto individuato soltanto per somiglianza.
 
 ## Excel
